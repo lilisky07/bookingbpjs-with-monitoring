@@ -1,0 +1,36 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: ./docker/production/nginx/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ../booking-bpjs-frontend/build:/var/www/frontend:ro
+      - laravel-storage-production:/var/www/storage
+      - laravel-prod:/var/www/backend
+    networks:
+      - laravel-production
+    ports:
+      - "8080:80"
+    env_file:
+      - .env
+   
+  php-fpm:
+    build:
+      context: .
+      dockerfile: ./docker/common/php-fpm/Dockerfile
+      target: production
+    restart: unless-stopped
+    volumes:
+      - laravel-storage-production:/var/www/storage
+      - laravel-prod:/var/www/backend
+    env_file:
+      - .env
+    networks:
+      - laravel-production
+
+networks:
+  laravel-production:
+volumes:
+  laravel-storage-production:
+  laravel-prod:

@@ -1,0 +1,166 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Models\WaConversationState;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+
+class ReminderHarian extends Command
+{
+    protected $signature = 'reminder:harian';
+    protected $description = 'Kirim reminder H-3 dan H-1 kontrol pasien';
+
+    const WABLAS_TOKEN = 'VB8zjsrnjSBJ0ebc9VlnxuRcqM3hUXkGLSW9OeQh466Ht22MDLIm7Rd1UJ6KWNfP';
+    const WABLAS_SECRET = '4vWr3WU7';
+    const WABLAS_LIST_URL = 'https://jogja.wablas.com/api/v2/send-list';
+
+    public function handle()
+    {
+        $this->kirimReminder(now()->addDays(3), 'H-3');
+        $this->kirimReminder(now()->addDay(), 'H-1');
+
+        echo "✅ Selesai!\n";
+    }
+
+    private function kirimReminder($tanggal, $label)
+    {
+        $data = DB::table('bridging_surat_kontrol_bpjs as sk')
+            ->join('bridging_sep as bs', 'sk.no_sep', '=', 'bs.no_sep')
+            ->join('reg_periksa as rp', 'bs.no_rawat', '=', 'rp.no_rawat')
+            ->join('pasien as p', 'rp.no_rkm_medis', '=', 'p.no_rkm_medis')
+            ->select(
+                'sk.no_sep',
+                'sk.nm_poli_bpjs as nm_poli',
+                'sk.nm_dokter_bpjs',
+                'sk.tgl_rencana',
+                'p.nm_pasien',
+                'p.no_tlp',
+                'rp.kd_dokter'
+            )
+            ->whereDate('sk.tgl_rencana', $tanggal)
+            ->whereDate('sk.tgl_surat', '>=', now()->subDays(30))
+            ->whereNotNull('p.no_tlp')
+            ->where('p.no_tlp', '!=', '')
+            ->get();
+
+        foreach ($data as $item) {
+            $no = $this->formatNomor($item->no_tlp);
+            if (!$no) {
+                continue;
+            }
+
+            $jam = $this->ambilJam($item->kd_dokter, $item->tgl_rencana);
+            $hari = $this->getHariIndo($item->tgl_rencana);
+
+            $deskripsi = $label === 'H-1'
+                ? "Halo kak {$item->nm_pasien}, besok hari {$hari} jadwal kontrol kakak:\n\n"
+                : "Halo kak {$item->nm_pasien}, kembali mengingatkan jadwal kontrol kakak:\n\n";
+
+            $this->kirimListMessage($no, [
+                'title' => "🔔 Pengingat {$label}",
+                'description' => $deskripsi
+                    . "🏥 Poli    : {$item->nm_poli}\n"
+                    . "👨‍⚕️ Dokter  : {$item->nm_dokter_bpjs}\n"
+                    . "📅 Tanggal : {$hari}, {$item->tgl_rencana}\n"
+                    . "⏰ Jam     : {$jam}\n\n"
+                    . "Apakah kakak ingin melakukan perubahan jadwal?",
+                'buttonText' => 'Pilih',
+                'lists' => [
+                    [
+                        'title' => 'Ubah jadwal',
+                        'description' => 'Saya ingin mengubah jadwal kontrol'
+                    ],
+                    [
+                        'title' => 'Tetap',
+                        'description' => 'Saya tetap dengan jadwal yang ada'
+                    ],
+                ],
+                'footer' => 'RSU GMC',
+            ], $item->nm_pasien);
+
+            WaConversationState::updateOrCreate(
+                ['phone' => $no],
+                [
+                    'state' => 'awaiting_reschedule_confirmation',
+                    'nm_pasien' => $item->nm_pasien,
+                    'nm_poli' => $item->nm_poli,
+                    'nm_dokter' => $item->nm_dokter_bpjs,
+                    'tgl_rencana' => $item->tgl_rencana,
+                    'kd_dokter' => $item->kd_dokter,
+                    'expires_at' => now()->addHours(48),
+                ]
+            );
+
+            sleep(2);
+        }
+    }
+
+    private function kirimListMessage($no, array $message, $nama)
+    {
+        $res = Http::withHeaders([
+            'Authorization' => self::WABLAS_TOKEN . '.' . self::WABLAS_SECRET,
+            'Content-Type' => 'application/json',
+        ])->post(self::WABLAS_LIST_URL, [
+            'data' => [[
+                'phone' => $no,
+                'message' => $message,
+            ]],
+        ]);
+
+        if ($res->successful()) {
+            echo "✔ Reminder terkirim ke: {$no} - {$nama}\n";
+        } else {
+            echo "❌ Gagal ke: {$no} - " . $res->body() . "\n";
+        }
+    }
+
+    private function ambilJam($kd_dokter, $tanggal)
+    {
+        $hari = $this->getHariIndo($tanggal);
+
+        $jadwal = DB::table('jadwal')
+            ->where('kd_dokter', $kd_dokter)
+            ->where('hari_kerja', $hari)
+            ->select('jam_mulai')
+            ->first();
+
+        if ($jadwal && $jadwal->jam_mulai) {
+            return $jadwal->jam_mulai . ' - selesai';
+        }
+
+        return 'Sesuai jadwal dokter';
+    }
+
+    private function getHariIndo($tanggal)
+    {
+        return match (date('l', strtotime($tanggal))) {
+            'Monday' => 'SENIN',
+            'Tuesday' => 'SELASA',
+            'Wednesday' => 'RABU',
+            'Thursday' => 'KAMIS',
+            'Friday' => 'JUMAT',
+            'Saturday' => 'SABTU',
+            'Sunday' => 'MINGGU',
+            default => '-',
+        };
+    }
+
+    private function formatNomor($no)
+    {
+        if (!$no) {
+            return null;
+        }
+
+        $no = preg_replace('/[^0-9]/', '', $no);
+
+        if (substr($no, 0, 2) === '08') {
+            $no = '62' . substr($no, 1);
+        } elseif (substr($no, 0, 2) !== '62') {
+            return null;
+        }
+
+        return $no;
+    }
+}
