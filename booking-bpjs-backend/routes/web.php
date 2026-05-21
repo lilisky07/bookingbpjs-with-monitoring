@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WablasWebhookController;
-use App\Http\Controllers\NpsLaporanController;
+use App\Http\Controllers\Api\NpsLaporanController;
 
 Route::get('/', function () {
     return view('welcome');

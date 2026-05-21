@@ -12,94 +12,234 @@ use App\Services\BpjsAntreanService;
 class MonitoringController extends Controller
 {
     public function tempatTidur(Request $request): JsonResponse
-    {
-        try {
-            $data = DB::table('kamar as k')
-                ->join('bangsal as b', 'k.kd_bangsal', '=', 'b.kd_bangsal')
-                ->where('b.status', '1')
-                ->where('k.statusdata', '1')
-                ->select(
-                    'b.nm_bangsal',
-                    'b.kd_bangsal',
-                    'k.kelas',
-                    DB::raw("CAST(COUNT(k.kd_kamar) AS SIGNED) as total"),
-                    DB::raw("CAST(SUM(k.status = 'ISI') AS SIGNED) as terisi"),
-                    DB::raw("CAST(SUM(k.status = 'KOSONG') AS SIGNED) as kosong"),
-                    DB::raw("CAST(SUM(k.status = 'DIBERSIHKAN') AS SIGNED) as dibersihkan"),
-                    DB::raw("CAST(SUM(k.status = 'DIBOOKING') AS SIGNED) as dibooking"),
-                    DB::raw("CAST(SUM(k.status = 'PERBAIKAN') AS SIGNED) as perbaikan"),
-                    DB::raw("NOW() as last_update")
-                )
-                ->groupBy('b.nm_bangsal', 'b.kd_bangsal', 'k.kelas')
-                ->orderBy('b.nm_bangsal')
-                ->orderBy('k.kelas')
-                ->get();
+{
+    try {
+        $data = DB::connection('kamar')->table('datkamar as dk')
+            ->join('ref_kamar as rk', 'dk.kodekelas', '=', 'rk.kodekelas')
+            ->select(
+                'rk.namakelas as kelas',
+                'dk.namaruang as nm_bangsal',
+                'dk.kapasitas as total',
+                DB::raw("(dk.kapasitas - COALESCE(dk.tersedia, 0)) as terisi"),
+                'dk.tersedia as kosong',
+                DB::raw("CASE 
+                    WHEN dk.kapasitas > 0 
+                    THEN ROUND((dk.kapasitas - dk.tersedia) / dk.kapasitas * 100, 1)
+                    ELSE 0 
+                END as bor_persen"),
+                'dk.updated_at as last_update'
+            )
+            ->orderBy('rk.namakelas')
+            ->orderBy('dk.namaruang')
+            ->get();
 
-            return response()->json(['success' => true, 'data' => $data]);
-        } catch (\Exception $e) {
-            Log::error('Monitoring tempatTidur error', ['msg' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
+        return response()->json(['success' => true, 'data' => $data]);
+    } catch (\Exception $e) {
+        Log::error('Monitoring tempatTidur error', ['msg' => $e->getMessage()]);
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
     }
+}
+
+
+public function borDashboard(Request $request)
+{
+    $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
+    $bulan   = substr($tanggal, 0, 7);     // YYYY-MM
+    $tahun   = substr($tanggal, 0, 4);
+
+    try {
+        $db = DB::connection('kamar');
+
+        // === Data BOR Real Time ===
+        $totalPerKelas = $db->table('datkamar')
+            ->join('ref_kamar', 'datkamar.kodekelas', '=', 'ref_kamar.kodekelas')
+            ->select(
+                'ref_kamar.kodekelas',
+                'ref_kamar.namakelas',
+                DB::raw('SUM(datkamar.kapasitas) as total_tt')
+            )
+            ->groupBy('ref_kamar.kodekelas', 'ref_kamar.namakelas')
+            ->get();
+
+        $tersediaPerKelas = $db->table('datkamar')
+            ->join('ref_kamar', 'datkamar.kodekelas', '=', 'ref_kamar.kodekelas')
+            ->select('ref_kamar.kodekelas', DB::raw('SUM(datkamar.tersedia) as total_tersedia'))
+            ->groupBy('ref_kamar.kodekelas')
+            ->get();
+
+        $data = [];
+        $grandTotalTT = 0;
+        $grandTotalTerisi = 0;
+
+        foreach ($totalPerKelas as $kelas) {
+            $tersedia = $tersediaPerKelas->firstWhere('kodekelas', $kelas->kodekelas)->total_tersedia ?? 0;
+            $terisi = $kelas->total_tt - $tersedia;
+            $bor = $kelas->total_tt > 0 ? round(($terisi / $kelas->total_tt) * 100, 2) : 0;
+
+            $data[] = [
+                'kodekelas' => $kelas->kodekelas,
+                'namakelas' => $kelas->namakelas,
+                'total_tt'  => (int)$kelas->total_tt,
+                'terisi'    => (int)$terisi,
+                'tersedia'  => (int)$tersedia,
+                'bor'       => $bor,
+            ];
+
+            $grandTotalTT += $kelas->total_tt;
+            $grandTotalTerisi += $terisi;
+        }
+
+        $borRealisasi = $grandTotalTT > 0 ? round(($grandTotalTerisi / $grandTotalTT) * 100, 2) : 0;
+
+        // === Target BOR (Hardcode) ===
+        $targets = [
+            'harian' => [
+                'target' => 78.0,
+                'realisasi' => $borRealisasi,
+                'selisih' => round($borRealisasi - 78.0, 2)
+            ],
+            'bulanan' => [
+                'target' => 75.0,
+                'realisasi' => $borRealisasi,   // nanti bisa dihitung rata-rata bulanan
+                'selisih' => round($borRealisasi - 75.0, 2)
+            ],
+            'tahunan' => [
+                'target' => 72.0,
+                'realisasi' => $borRealisasi,   // nanti bisa dihitung rata-rata tahunan
+                'selisih' => round($borRealisasi - 72.0, 2)
+            ]
+        ];
+
+        return response()->json([
+            'success'            => true,
+            'tanggal'            => $tanggal,
+            'total_tempat_tidur' => $grandTotalTT,
+            'total_terisi'       => $grandTotalTerisi,
+            'total_tersedia'     => $grandTotalTT - $grandTotalTerisi,
+            'bor_harian'         => $data,
+            'bor_realisasi'      => $borRealisasi,
+            'targets'            => $targets
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
 
     public function startAntrol(Request $request): JsonResponse
     {
         try {
             $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
 
-            // ── GABUNGAN: MJKN + non-MJKN rawat jalan (exclude ranap)
-            // Ini yang cocok dengan cara SIMRS Khanza hitung "Record" dan "Selesai"
-            $gabungan = DB::select("
-                SELECT 
-                    COUNT(*) as total_record,
-                    SUM(CASE WHEN no_rawat IS NOT NULL THEN 1 ELSE 0 END) as sudah_registrasi,
-                    SUM(CASE WHEN no_rawat IS NULL THEN 1 ELSE 0 END) as belum_registrasi,
-                    SUM(CASE WHEN status = 'Batal' THEN 1 ELSE 0 END) as batal,
-                    SUM(CASE WHEN status = 'Checkin' THEN 1 ELSE 0 END) as checkin
-                FROM (
-                    SELECT no_rawat, status
-                    FROM referensi_mobilejkn_bpjs
-                    WHERE DATE(tanggalperiksa) = ?
+            // ══════════════════════════════════════════════════════════
+            // BLOK 1 — DATA MJKN (referensi_mobilejkn_bpjs)
+            // Definisi sama dengan SIM RS Khanza:
+            //   Record   = semua baris di tabel per tanggal
+            //   Belum    = status 'Belum'
+            //   Checkin  = status 'Checkin'  (= "Selesai" di SIM RS)
+            //   Batal    = status 'Batal'
+            // ══════════════════════════════════════════════════════════
+            $mjknStats = DB::select("
+                SELECT
+                    COUNT(*)                                        AS record,
+                    SUM(status = 'Belum')                          AS mjkn_belum,
+                    SUM(status = 'Checkin')                        AS mjkn_selesai,
+                    SUM(status = 'Batal')                          AS mjkn_batal,
+                    SUM(status = 'Gagal')                          AS mjkn_gagal
+                FROM referensi_mobilejkn_bpjs
+                WHERE DATE(tanggalperiksa) = ?
+            ", [$tanggal]);
 
-                    UNION ALL
+            $m = $mjknStats[0];
+            $record       = (int)$m->record;
+            $mjknBelum    = (int)$m->mjkn_belum;
+            $mjknSelesai  = (int)$m->mjkn_selesai;
+            $mjknBatal    = (int)$m->mjkn_batal;
 
-                    SELECT rp.no_rawat, 'Checkin' as status
-                    FROM reg_periksa rp
-                    WHERE DATE(rp.tgl_registrasi) = ?
-                    AND rp.kd_pj = 'BPJ'
-                    AND rp.kd_poli IS NOT NULL AND rp.kd_poli != ''
-                    AND NOT EXISTS (
-                        SELECT 1 FROM referensi_mobilejkn_bpjs rmb2
-                        WHERE rmb2.norm = rp.no_rkm_medis
-                        AND DATE(rmb2.tanggalperiksa) = ?
-                    )
-                    AND NOT EXISTS (
-                        SELECT 1 FROM kamar_inap ki WHERE ki.no_rawat = rp.no_rawat
-                    )
-                ) as gabungan
-            ", [$tanggal, $tanggal, $tanggal]);
+            // ══════════════════════════════════════════════════════════
+            // BLOK 2 — DATA JKN NON-MJKN
+            // = pasien BPJS (kd_pj = 'BPJ') rawat jalan yang terdaftar
+            //   di reg_periksa tapi TIDAK ada di referensi_mobilejkn_bpjs
+            //   (bukan via Mobile JKN — daftar langsung di loket)
+            // Definisi sama dengan kolom "JKN" di SIM RS Khanza
+            // ══════════════════════════════════════════════════════════
+            $jknStats = DB::select("
+                SELECT
+                    COUNT(*)                              AS jkn_total,
+                    SUM(rp.stts != 'Batal')              AS jkn_selesai,
+                    SUM(rp.stts = 'Batal')               AS jkn_batal,
+                    SUM(rp.stts = 'Belum')               AS jkn_belum
+                FROM reg_periksa rp
+                WHERE DATE(rp.tgl_registrasi) = ?
+                  AND rp.kd_pj = 'BPJ'
+                  AND rp.status_lanjut = 'Ralan'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM referensi_mobilejkn_bpjs rmb
+                      WHERE rmb.norm = rp.no_rkm_medis
+                        AND DATE(rmb.tanggalperiksa) = ?
+                  )
+            ", [$tanggal, $tanggal]);
 
-            $g = $gabungan[0] ?? null;
-            $totalAntrol    = (int)($g->total_record ?? 0);
-            $sudahRegistrasi = (int)($g->sudah_registrasi ?? 0);
-            $belumRegistrasi = (int)($g->belum_registrasi ?? 0);
-            $totalBatal     = (int)($g->batal ?? 0);
+            $j = $jknStats[0];
+            $jknTotal   = (int)$j->jkn_total;
+            $jknSelesai = (int)$j->jkn_selesai;
+            $jknBelum   = (int)$j->jkn_belum;
 
-            // MJKN only count
-            $viaMjkn = DB::table('referensi_mobilejkn_bpjs')
-                ->whereDate('tanggalperiksa', $tanggal)
-                ->count();
+            // ══════════════════════════════════════════════════════════
+            // BLOK 3 — DATA NON JKN
+            // = pasien rawat jalan BUKAN BPJS (kd_pj != 'BPJ')
+            // Definisi sama dengan kolom "Non JKN" di SIM RS Khanza
+            // ══════════════════════════════════════════════════════════
+            $nonJknStats = DB::select("
+                SELECT
+                    COUNT(*)                              AS non_jkn_total,
+                    SUM(rp.stts != 'Batal')              AS non_jkn_selesai,
+                    SUM(rp.stts = 'Belum')               AS non_jkn_belum
+                FROM reg_periksa rp
+                WHERE DATE(rp.tgl_registrasi) = ?
+                  AND rp.kd_pj != 'BPJ'
+                  AND rp.status_lanjut = 'Ralan'
+            ", [$tanggal]);
 
-            $mjknSelesai = DB::table('referensi_mobilejkn_bpjs')
-                ->whereDate('tanggalperiksa', $tanggal)
-                ->whereNotNull('no_rawat')
-                ->count();
+            $nj = $nonJknStats[0];
+            $nonJknTotal   = (int)$nj->non_jkn_total;
+            $nonJknSelesai = (int)$nj->non_jkn_selesai;
+            $nonJknBelum   = (int)$nj->non_jkn_belum;
 
-            $sepTerbit = DB::table('bridging_sep')->whereDate('tglsep', $tanggal)->count();
-            $sepRalan  = DB::table('bridging_sep')->whereDate('tglsep', $tanggal)->where('jnspelayanan', '1')->count();
-            $sepRanap  = DB::table('bridging_sep')->whereDate('tglsep', $tanggal)->where('jnspelayanan', '2')->count();
+            // ══════════════════════════════════════════════════════════
+            // BLOK 4 — TOTAL BELUM & TOTAL SELESAI
+            // = gabungan MJKN + JKN non-MJKN (tidak include Non-JKN)
+            // Sama persis dengan "Total Belum" & "Total Selesai" di SIM RS
+            // ══════════════════════════════════════════════════════════
+            $totalBelum   = $mjknBelum + $jknBelum;
+            $totalSelesai = $mjknSelesai + $jknSelesai;
+            $totalBatal   = $mjknBatal + $jknStats[0]->jkn_batal;
 
-            // ── TASKID: status alur pelayanan (filter by reg_periksa.tgl_registrasi)
+            // ══════════════════════════════════════════════════════════
+            // BLOK 5 — SEP TERBIT
+            // Filter: join ke reg_periksa supaya hanya hitung SEP
+            // yang registrasinya di tanggal tersebut (bukan tglsep doang)
+            // Ini yang bikin angka SIM RS beda dengan COUNT(*) bridging_sep
+            // ══════════════════════════════════════════════════════════
+            $sepStats = DB::select("
+                SELECT
+                    COUNT(*)                          AS sep_terbit,
+                    SUM(bs.jnspelayanan = '1')        AS sep_ralan,
+                    SUM(bs.jnspelayanan = '2')        AS sep_ranap
+                FROM bridging_sep bs
+                INNER JOIN reg_periksa rp ON rp.no_rawat = bs.no_rawat
+                WHERE DATE(rp.tgl_registrasi) = ?
+            ", [$tanggal]);
+
+            $s = $sepStats[0];
+            $sepTerbit = (int)$s->sep_terbit;
+            $sepRalan  = (int)$s->sep_ralan;
+            $sepRanap  = (int)$s->sep_ranap;
+
+            // ══════════════════════════════════════════════════════════
+            // BLOK 6 — TASKID (alur pelayanan MJKN)
+            // ══════════════════════════════════════════════════════════
             $taskStats = DB::select("
                 SELECT t.taskid, COUNT(DISTINCT t.no_rawat) as jumlah
                 FROM referensi_mobilejkn_bpjs_taskid t
@@ -117,22 +257,41 @@ class MonitoringController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'total_antrol'      => $totalAntrol,       // MJKN + non-MJKN ralan
-                    'sudah_registrasi'  => $sudahRegistrasi,   // = "Selesai" versi SIMRS
-                    'belum_registrasi'  => $belumRegistrasi,   // = "Belum" versi SIMRS
+                    // ── Angka utama (sama dengan header SIM RS) ──────
+                    'record'            => $record,          // semua entri MJKN termasuk Batal
+                    'total_belum'       => $totalBelum,      // MJKN Belum + JKN Belum
+                    'total_selesai'     => $totalSelesai,    // MJKN Checkin + JKN Selesai
                     'total_batal'       => $totalBatal,
-                    'via_mjkn'          => $viaMjkn,           // hanya dari referensi_mobilejkn_bpjs
-                    'mjkn_selesai'      => $mjknSelesai,       // MJKN yang sudah punya no_rawat
+
+                    // ── MJKN (Mobile JKN) ────────────────────────────
+                    'mjkn_total'        => $record,
+                    'mjkn_belum'        => $mjknBelum,
+                    'mjkn_selesai'      => $mjknSelesai,
+                    'mjkn_batal'        => $mjknBatal,
+
+                    // ── JKN non-MJKN (loket BPJS) ───────────────────
+                    'jkn_total'         => $jknTotal,
+                    'jkn_belum'         => $jknBelum,
+                    'jkn_selesai'       => $jknSelesai,
+
+                    // ── Non JKN (umum/non-BPJS) ─────────────────────
+                    'non_jkn_total'     => $nonJknTotal,
+                    'non_jkn_belum'     => $nonJknBelum,
+                    'non_jkn_selesai'   => $nonJknSelesai,
+
+                    // ── SEP ──────────────────────────────────────────
                     'sep_terbit'        => $sepTerbit,
                     'sep_ralan'         => $sepRalan,
                     'sep_ranap'         => $sepRanap,
-                    // taskid breakdown (dari yang sudah registrasi)
+
+                    // ── Alur pelayanan taskid ────────────────────────
                     'tunggu_pelayanan'  => (int)($taskMap['3'] ?? 0),
                     'dilayani'          => (int)($taskMap['4'] ?? 0),
                     'selesai_dilayani'  => (int)($taskMap['5'] ?? 0),
                     'tunggu_farmasi'    => (int)($taskMap['6'] ?? 0),
                     'selesai'           => (int)($taskMap['7'] ?? 0),
                     'batal_taskid'      => (int)($taskMap['99'] ?? 0),
+
                     'tanggal'           => $tanggal,
                 ]
             ]);
@@ -317,155 +476,115 @@ class MonitoringController extends Controller
         }
     }
 
-    // ─────────────────────────────────────────
-    // ANTROL PER TANGGAL — data dari API BPJS real-time
-    // Digabung dengan data DB lokal untuk info tambahan (nama pasien, dll)
-    // ─────────────────────────────────────────
-    public function antrolPertanggal(Request $request): JsonResponse
-    {
-        try {
-            $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
-            $search  = $request->get('search');
-            $status  = $request->get('status');
 
-            $bpjs = new BpjsAntreanService();
 
-            // Hit API BPJS — ambil semua antrian per tanggal
-            $apiResult = $bpjs->getAntreanByTanggal($tanggal);
 
-            // Kalau API error / tidak ada data, fallback ke DB lokal
-            if (empty($apiResult) || isset($apiResult['error'])) {
-                return $this->antrolPertanggalFromDb($request);
-            }
+public function antrolPertanggal(Request $request): JsonResponse
+{
+    try {
+        $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
+        $search  = $request->get('search');
+        $status  = $request->get('status');
 
-            // Ambil list antrian dari response API
-            // Struktur response BPJS: { metaData: {...}, response: { list: [...] } }
-            $listAntrian = $apiResult['response']['list']
-                ?? $apiResult['response']
-                ?? $apiResult['list']
-                ?? [];
+        $query = DB::table('referensi_mobilejkn_bpjs as rmb')
+            ->leftJoin('pasien as p', 'rmb.norm', '=', 'p.no_rkm_medis')
+            ->leftJoin('poliklinik as pol', 'rmb.kodepoli', '=', 'pol.kd_poli')
+            ->leftJoin('dokter as d', 'rmb.kodedokter', '=', 'd.kd_dokter')
+            ->leftJoin('bridging_sep as bs', 'bs.no_rawat', '=', 'rmb.no_rawat')
+            ->leftJoin('reg_periksa as rp', 'rmb.no_rawat', '=', 'rp.no_rawat')
 
-            if (empty($listAntrian)) {
-                // Coba fallback DB jika API tidak return data
-                return $this->antrolPertanggalFromDb($request);
-            }
+            // Subquery taskid yang lebih aman
+            ->leftJoin(DB::raw("(
+                SELECT 
+                    rmb2.norm,
+                    rmb2.tanggalperiksa,
+                    MAX(t.taskid) as last_taskid,
+                    MAX(t.waktu) as waktu_task
+                FROM referensi_mobilejkn_bpjs as rmb2
+                LEFT JOIN referensi_mobilejkn_bpjs_taskid t 
+                       ON t.no_rawat = rmb2.no_rawat
+                WHERE DATE(rmb2.tanggalperiksa) = ?
+                GROUP BY rmb2.norm, rmb2.tanggalperiksa
+            ) as tk"), function($join) {
+                $join->on('tk.norm', '=', 'rmb.norm')
+                     ->on('tk.tanggalperiksa', '=', 'rmb.tanggalperiksa');
+            })
 
-            // Enrich data API dengan info dari DB lokal (nama pasien, nm_poli, nm_dokter)
-            // Ambil semua norm (no RM) dari API response untuk batch query
-            $norms = collect($listAntrian)->pluck('norm')->filter()->unique()->values()->toArray();
+            ->whereDate('rmb.tanggalperiksa', $tanggal)
+            ->select(
+                'rmb.nobooking',
+                'p.no_rkm_medis as no_rm',
+                'p.nm_pasien as nama',
+                'rmb.nomorkartu',
+                'rmb.nik',
+                'rmb.kodepoli',
+                DB::raw("COALESCE(pol.nm_poli, rmb.kodepoli) as nm_poli"),
+                DB::raw("COALESCE(d.nm_dokter, rmb.kodedokter) as nm_dokter"),
+                'rmb.jampraktek',
+                'rmb.tanggalperiksa',
+                'rmb.nomorantrean',
+                'rmb.angkaantrean',
+                'rmb.estimasidilayani',
+                'rmb.jeniskunjungan',
+                'rmb.status as status_antrol',
+                'bs.no_sep',
+                DB::raw("DATE_FORMAT(rmb.validasi, '%Y-%m-%d %H:%i') as waktu_booking"),
+                'tk.last_taskid',
+                DB::raw("DATE_FORMAT(tk.waktu_task, '%H:%i') as waktu_task"),
+                DB::raw("'Mobile JKN' as sumber")
+            )
+            ->orderByRaw("CAST(rmb.angkaantrean AS UNSIGNED) ASC")
+            ->addBinding($tanggal, 'select');   // ← Penting!
 
-            $pasienMap = [];
-            if (!empty($norms)) {
-                $pasienMap = \DB::table('pasien')
-                    ->whereIn('no_rkm_medis', $norms)
-                    ->pluck('nm_pasien', 'no_rkm_medis')
-                    ->toArray();
-            }
-
-            // Ambil SEP yang sudah terbit
-            $sepMap = \DB::table('bridging_sep')
-                ->whereDate('tglsep', $tanggal)
-                ->pluck('no_sep', 'no_rawat')
-                ->toArray();
-
-            // Ambil taskid terakhir dari DB
-            $taskMap = \DB::select("
-                SELECT t.no_rawat, t.taskid as last_taskid
-                FROM referensi_mobilejkn_bpjs_taskid t
-                INNER JOIN (
-                    SELECT no_rawat, MAX(waktu) as max_waktu
-                    FROM referensi_mobilejkn_bpjs_taskid
-                    GROUP BY no_rawat
-                ) lt ON t.no_rawat = lt.no_rawat AND t.waktu = lt.max_waktu
-                INNER JOIN reg_periksa rp ON rp.no_rawat = t.no_rawat
-                WHERE DATE(rp.tgl_registrasi) = ?
-            ", [$tanggal]);
-            $taskById = collect($taskMap)->pluck('last_taskid', 'no_rawat')->toArray();
-
-            // Normalize data API ke format frontend
-            // Field sesuai dokumentasi BPJS Antrean RS:
-            // kodebooking, norekammedis, nokapst, noantrean, sumberdata,
-            // estimasidilayani (ms timestamp), createdtime (ms timestamp), status (string)
-            $normalized = collect($listAntrian)->map(function ($item) use ($pasienMap, $sepMap, $taskById) {
-                $norm    = $item['norekammedis'] ?? $item['noRekamMedis'] ?? '';
-                $noRawat = null; // API BPJS tidak return no_rawat, ambil dari DB via kodebooking
-
-                // Convert timestamp ms ke jam HH:mm
-                $estimasi = '-';
-                if (!empty($item['estimasidilayani']) && is_numeric($item['estimasidilayani'])) {
-                    $estimasi = date('H:i', (int)($item['estimasidilayani'] / 1000));
-                }
-                $createdTime = '-';
-                if (!empty($item['createdtime']) && is_numeric($item['createdtime'])) {
-                    $createdTime = date('Y-m-d H:i', (int)($item['createdtime'] / 1000));
-                }
-
-                // Map status BPJS ke status lokal
-                $statusRaw = $item['status'] ?? '-';
-                $statusMap = [
-                    'Selesai dilayani' => 'Checkin',
-                    'Belum dilayani'   => 'Belum',
-                    'Batal'            => 'Batal',
-                    'Checkin'          => 'Checkin',
-                ];
-                $status = $statusMap[$statusRaw] ?? $statusRaw;
-
-                return [
-                    'nobooking'        => $item['kodebooking'] ?? '-',
-                    'no_rm'            => $norm,
-                    'nama'             => $pasienMap[$norm] ?? '-',
-                    'nomorkartu'       => $item['nokapst'] ?? '-',
-                    'nik'              => $item['nik'] ?? '-',
-                    'nohp'             => $item['nohp'] ?? '-',
-                    'nm_poli'          => $item['kodepoli'] ?? '-',   // enrich dari DB jika perlu
-                    'nm_dokter'        => (string)($item['kodedokter'] ?? '-'),
-                    'jampraktek'       => $item['jampraktek'] ?? '-',
-                    'tanggalperiksa'   => $item['tanggal'] ?? '-',
-                    'nomorantrean'     => $item['noantrean'] ?? '-',
-                    'angkaantrean'     => (int) preg_replace('/[^0-9]/', '', $item['noantrean'] ?? '0'),
-                    'estimasidilayani' => $estimasi,
-                    'jeniskunjungan'   => (string)($item['jeniskunjungan'] ?? '-'),
-                    'nomorreferensi'   => $item['nomorreferensi'] ?? '-',
-                    'sumber'           => $item['sumberdata'] ?? 'Mobile JKN',
-                    'ispeserta'        => $item['ispeserta'] ?? 0,
-                    'no_sep'           => $sepMap[$noRawat] ?? null,
-                    'status'           => $status,
-                    'status_raw'       => $statusRaw,   // status asli dari BPJS
-                    'last_taskid'      => null,          // taskid dari DB via no_rawat (tidak tersedia dari API)
-                    'waktu_booking'    => $createdTime,
-                    'no_rawat'         => $noRawat,
-                ];
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('p.nm_pasien', 'like', "%{$search}%")
+                  ->orWhere('rmb.norm', 'like', "%{$search}%")
+                  ->orWhere('rmb.nobooking', 'like', "%{$search}%")
+                  ->orWhere('bs.no_sep', 'like', "%{$search}%");
             });
-
-            // Filter search
-            if ($search) {
-                $s = strtolower($search);
-                $normalized = $normalized->filter(function ($r) use ($s) {
-                    return str_contains(strtolower($r['nama'] ?? ''), $s)
-                        || str_contains(strtolower($r['no_rm'] ?? ''), $s)
-                        || str_contains(strtolower($r['nobooking'] ?? ''), $s)
-                        || str_contains(strtolower($r['nik'] ?? ''), $s)
-                        || str_contains(strtolower($r['no_sep'] ?? ''), $s);
-                });
-            }
-
-            // Filter status
-            if ($status) {
-                $normalized = $normalized->filter(fn($r) => ($r['status'] ?? '') === $status);
-            }
-
-            return response()->json([
-                'success' => true,
-                'source'  => 'api_bpjs',
-                'data'    => $normalized->values(),
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Monitoring antrolPertanggal error', ['msg' => $e->getMessage()]);
-            // Fallback ke DB jika exception
-            return $this->antrolPertanggalFromDb($request);
         }
+
+        if ($status) {
+            $query->where('rmb.status', $status);
+        }
+
+        $data = $query->get();
+
+        // Mapping status alur
+        $data = $data->map(function($row) {
+            $task = $row->last_taskid;
+
+            $statusAlur = match((string)$task) {
+                '3'  => 'Tunggu Pelayanan',
+                '4'  => 'Sedang Dilayani',
+                '5'  => 'Selesai Dilayani',
+                '6'  => 'Tunggu Farmasi',
+                '7'  => 'Selesai',
+                '99' => 'Batal',
+                null => in_array($row->status_antrol, ['Batal','Gagal']) 
+                        ? $row->status_antrol 
+                        : ($row->status_antrol === 'Checkin' ? 'Checkin' : 'Belum'),
+                default => 'Belum'
+            };
+
+            return [
+                ... (array)$row,
+                'status_alur' => $statusAlur,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'total'   => $data->count(),
+            'data'    => $data
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Monitoring antrolPertanggal error', ['msg' => $e->getMessage()]);
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
     }
+}
 
     // Fallback: ambil dari DB lokal jika API BPJS tidak tersedia
     private function antrolPertanggalFromDb(Request $request): JsonResponse

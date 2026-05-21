@@ -113,7 +113,23 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+         // Kamar Database Connection
+            'kamar' => [
+            'driver'    => 'mysql',
+            'host'      => env('KAMAR_DB_HOST', '127.0.0.1'),
+            'port'      => env('KAMAR_DB_PORT', '3306'),
+            'database'  => env('KAMAR_DB_DATABASE', 'kamar'),
+            'username'  => env('KAMAR_DB_USERNAME', 'root'),
+            'password'  => env('KAMAR_DB_PASSWORD', ''),
+            'charset'   => 'utf8',
+            'collation' => 'utf8_unicode_ci',
+            'prefix'    => '',
+            'strict'    => false,
+        ],
+
     ],
+
+   
 
     /*
     |--------------------------------------------------------------------------

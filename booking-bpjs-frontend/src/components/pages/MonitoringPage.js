@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-// ─────────────────────────────────────────────
-// HELPER UTILS
-// ─────────────────────────────────────────────
 const fmt = (v) => (v === null || v === undefined ? '-' : v);
 const fmtTime = (t) => {
   if (!t) return '-';
@@ -22,27 +19,17 @@ const Pill = ({ status }) => {
   const s = STATUS_COLOR[status] || { bg: '#f1f5f9', text: '#475569', label: status || '-' };
   return (
     <span style={{
-      display: 'inline-block',
-      padding: '3px 10px',
-      borderRadius: '20px',
-      fontSize: '12px',
-      fontWeight: 700,
-      background: s.bg,
-      color: s.text,
-      letterSpacing: '0.3px'
+      display: 'inline-block', padding: '3px 10px', borderRadius: '20px',
+      fontSize: '12px', fontWeight: 700, background: s.bg, color: s.text, letterSpacing: '0.3px'
     }}>{s.label}</span>
   );
 };
 
 const StatCard = ({ label, value, sub, color = '#2563eb', icon }) => (
   <div style={{
-    background: '#fff',
-    borderRadius: '14px',
-    padding: '20px 22px',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-    borderLeft: `4px solid ${color}`,
-    minWidth: 0,
-    flex: '1 1 160px'
+    background: '#fff', borderRadius: '14px', padding: '20px 22px',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.07)', borderLeft: `4px solid ${color}`,
+    minWidth: 0, flex: '1 1 160px'
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
       <div>
@@ -76,24 +63,18 @@ const TableWrap = ({ children }) => (
 
 const TH = ({ children, style = {} }) => (
   <th style={{
-    padding: '10px 14px', background: '#eff6ff',
-    textAlign: 'left', fontWeight: 700, color: '#1e40af',
-    borderBottom: '1px solid #dbeafe', whiteSpace: 'nowrap', ...style
+    padding: '10px 14px', background: '#eff6ff', textAlign: 'left', fontWeight: 700,
+    color: '#1e40af', borderBottom: '1px solid #dbeafe', whiteSpace: 'nowrap', ...style
   }}>{children}</th>
 );
 
 const TD = ({ children, style = {} }) => (
-  <td style={{
-    padding: '10px 14px', borderBottom: '1px solid #f1f5f9',
-    color: '#374151', ...style
-  }}>{children}</td>
+  <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', color: '#374151', ...style }}>
+    {children}
+  </td>
 );
 
-// ─────────────────────────────────────────────
-// SECTION COMPONENTS
-// ─────────────────────────────────────────────
-
-// 1. KETERSEDIAAN TEMPAT TIDUR
+// ─── TEMPAT TIDUR ────────────────────────────────────────────────────
 const TempurTidurSection = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,11 +82,10 @@ const TempurTidurSection = () => {
   useEffect(() => {
     axios.get('/api/monitoring/tempat-tidur')
       .then(r => { if (r.data.success) setData(r.data.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const total = data.reduce((a, b) => a + (b.total || 0), 0);
+  const total  = data.reduce((a, b) => a + (b.total  || 0), 0);
   const terisi = data.reduce((a, b) => a + (b.terisi || 0), 0);
   const kosong = total - terisi;
 
@@ -113,41 +93,38 @@ const TempurTidurSection = () => {
     <div>
       <SectionTitle icon="🛏️">Ketersediaan Tempat Tidur</SectionTitle>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <StatCard label="Total TT" value={loading ? '…' : total} color="#2563eb" icon="🏥" />
-        <StatCard label="Terisi" value={loading ? '…' : terisi} color="#dc2626" sub={`${total ? Math.round(terisi/total*100) : 0}% BOR`} icon="🛌" />
-        <StatCard label="Kosong" value={loading ? '…' : kosong} color="#16a34a" icon="✅" />
+        <StatCard label="Total TT" value={loading ? '…' : total}  color="#2563eb" icon="🏥" />
+        <StatCard label="Terisi"   value={loading ? '…' : terisi} color="#dc2626" sub={`${total ? Math.round(terisi/total*100) : 0}% BOR`} icon="🛌" />
+        <StatCard label="Kosong"   value={loading ? '…' : kosong} color="#16a34a" icon="✅" />
       </div>
       {loading ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>Memuat data...</p> : (
         <TableWrap>
           <thead>
-            <tr>
-              <TH>Ruangan</TH><TH>Kelas</TH><TH>Total TT</TH>
-              <TH>Terisi</TH><TH>Kosong</TH><TH>BOR %</TH><TH>Last Update</TH>
-            </tr>
+            <tr><TH>Ruangan</TH><TH>Kelas</TH><TH>Total TT</TH><TH>Terisi</TH><TH>Kosong</TH><TH>BOR %</TH><TH>Last Update</TH></tr>
           </thead>
           <tbody>
-            {data.length === 0 ? (
-              <tr><TD style={{ textAlign: 'center', color: '#94a3b8' }} colSpan={7}>Tidak ada data tempat tidur</TD></tr>
-            ) : data.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                <TD>{fmt(row.nm_bangsal)}</TD>
-                <TD>{fmt(row.kelas)}</TD>
-                <TD style={{ fontWeight: 700 }}>{fmt(row.total)}</TD>
-                <TD style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(row.terisi)}</TD>
-                <TD style={{ color: '#16a34a', fontWeight: 600 }}>{fmt(row.kosong)}</TD>
-                <TD>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 1, background: '#e5e7eb', borderRadius: 4, height: 6 }}>
-                      <div style={{ width: `${row.total ? Math.min(100, row.terisi/row.total*100) : 0}%`, background: '#2563eb', height: 6, borderRadius: 4 }} />
+            {data.length === 0
+              ? <tr><TD style={{ textAlign: 'center', color: '#94a3b8' }} colSpan={7}>Tidak ada data tempat tidur</TD></tr>
+              : data.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <TD>{fmt(row.nm_bangsal)}</TD>
+                  <TD>{fmt(row.kelas)}</TD>
+                  <TD style={{ fontWeight: 700 }}>{fmt(row.total)}</TD>
+                  <TD style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(row.terisi)}</TD>
+                  <TD style={{ color: '#16a34a', fontWeight: 600 }}>{fmt(row.kosong)}</TD>
+                  <TD>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, background: '#e5e7eb', borderRadius: 4, height: 6 }}>
+                        <div style={{ width: `${row.total ? Math.min(100, row.terisi/row.total*100) : 0}%`, background: '#2563eb', height: 6, borderRadius: 4 }} />
+                      </div>
+                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
+                        {row.total ? Math.round(row.terisi/row.total*100) : 0}%
+                      </span>
                     </div>
-                    <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
-                      {row.total ? Math.round(row.terisi/row.total*100) : 0}%
-                    </span>
-                  </div>
-                </TD>
-                <TD style={{ fontSize: 12, color: '#94a3b8' }}>{fmt(row.last_update)}</TD>
-              </tr>
-            ))}
+                  </TD>
+                  <TD style={{ fontSize: 12, color: '#94a3b8' }}>{fmt(row.last_update)}</TD>
+                </tr>
+              ))}
           </tbody>
         </TableWrap>
       )}
@@ -155,15 +132,123 @@ const TempurTidurSection = () => {
   );
 };
 
-// 2. START ANTROL (MJKN vs Manual)
-const TASK_LABELS = {
-  '3':  { label: 'Tunggu Pelayanan',   color: '#d97706', bg: '#fef9c3', icon: '⏳' },
-  '4':  { label: 'Sedang Dilayani',    color: '#2563eb', bg: '#dbeafe', icon: '👨‍⚕️' },
-  '5':  { label: 'Pelayanan Selesai',  color: '#059669', bg: '#dcfce7', icon: '✅' },
-  '6':  { label: 'Tunggu Farmasi',     color: '#7c3aed', bg: '#ede9fe', icon: '💊' },
-  '7':  { label: 'Farmasi Selesai',    color: '#15803d', bg: '#bbf7d0', icon: '🏁' },
-  '99': { label: 'Batal',              color: '#dc2626', bg: '#fee2e2', icon: '❌' },
+// ─── BOR DASHBOARD + TARGET (HARIAN, BULANAN, TAHUNAN) ─────────────────────
+const BorTargetSection = () => {
+  const [dataBor, setDataBor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tanggal, setTanggal] = useState(today());
+
+  useEffect(() => {
+    setLoading(true);
+    axios.get('/api/monitoring/bor', { params: { tanggal } })
+      .then(r => {
+        if (r.data.success) setDataBor(r.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [tanggal]);
+
+  const t = (key) => dataBor?.targets?.[key] || {};
+
+  return (
+    <div>
+      <SectionTitle icon="📈">Target BOR & Realisasi</SectionTitle>
+
+      {loading ? (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>Memuat data BOR...</p>
+      ) : (
+        <>
+          {/* Overall + Target Cards */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+            <StatCard 
+              label="BOR Realisasi Saat Ini" 
+              value={`${dataBor?.bor_realisasi || 0}%`} 
+              sub={`Total TT: ${dataBor?.total_tempat_tidur || 0} | Terisi: ${dataBor?.total_terisi || 0}`}
+              color="#1e40af" 
+              icon="📊" 
+            />
+
+            <StatCard 
+              label="Target Harian" 
+              value={`${t('harian').target || 0}%`} 
+              sub={`Selisih: ${t('harian').selisih >= 0 ? '+' : ''}${t('harian').selisih || 0}%`}
+              color={t('harian').selisih >= 0 ? '#15803d' : '#dc2626'} 
+            />
+
+            <StatCard 
+              label="Target Bulanan" 
+              value={`${t('bulanan').target || 0}%`} 
+              sub={`Selisih: ${t('bulanan').selisih >= 0 ? '+' : ''}${t('bulanan').selisih || 0}%`}
+              color={t('bulanan').selisih >= 0 ? '#15803d' : '#dc2626'} 
+            />
+
+            <StatCard 
+              label="Target Tahunan" 
+              value={`${t('tahunan').target || 0}%`} 
+              sub={`Selisih: ${t('tahunan').selisih >= 0 ? '+' : ''}${t('tahunan').selisih || 0}%`}
+              color={t('tahunan').selisih >= 0 ? '#15803d' : '#dc2626'} 
+            />
+          </div>
+
+          {/* Detail per Kelas */}
+          <TableWrap>
+            <thead>
+              <tr>
+                <TH>Kelas Kamar</TH>
+                <TH>Total TT</TH>
+                <TH>Terisi</TH>
+                <TH>Tersedia</TH>
+                <TH>BOR %</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {dataBor?.bor_harian?.map((item, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <TD style={{ fontWeight: 600 }}>{item.namakelas}</TD>
+                  <TD style={{ textAlign: 'center', fontWeight: 700 }}>{item.total_tt}</TD>
+                  <TD style={{ textAlign: 'center', color: '#dc2626', fontWeight: 600 }}>{item.terisi}</TD>
+                  <TD style={{ textAlign: 'center', color: '#16a34a', fontWeight: 600 }}>{item.tersedia}</TD>
+                  <TD style={{ textAlign: 'center' }}>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      fontWeight: 700,
+                      background: item.bor >= 80 ? '#fee2e2' : item.bor >= 60 ? '#fef9c3' : '#dcfce7',
+                      color: item.bor >= 80 ? '#b91c1c' : item.bor >= 60 ? '#92400e' : '#15803d'
+                    }}>
+                      {item.bor}%
+                    </span>
+                  </TD>
+                </tr>
+              ))}
+            </tbody>
+          </TableWrap>
+        </>
+      )}
+    </div>
+  );
 };
+
+// ─── TASK LABELS ─────────────────────────────────────────────────────
+const TASK_LABELS = {
+  '3':  { label: 'Tunggu Pelayanan',  color: '#d97706', bg: '#fef9c3', icon: '⏳' },
+  '4':  { label: 'Sedang Dilayani',   color: '#2563eb', bg: '#dbeafe', icon: '👨‍⚕️' },
+  '5':  { label: 'Pelayanan Selesai', color: '#059669', bg: '#dcfce7', icon: '✅' },
+  '6':  { label: 'Tunggu Farmasi',    color: '#7c3aed', bg: '#ede9fe', icon: '💊' },
+  '7':  { label: 'Farmasi Selesai',   color: '#15803d', bg: '#bbf7d0', icon: '🏁' },
+  '99': { label: 'Batal',             color: '#dc2626', bg: '#fee2e2', icon: '❌' },
+};
+
+// ─── START ANTROL ────────────────────────────────────────────────────
+const MiniStat = ({ label, value, color = '#1e293b', bg = '#f8fafc' }) => (
+  <div style={{
+    background: bg, borderRadius: 10, padding: '10px 16px',
+    textAlign: 'center', minWidth: 100, flex: '1 1 100px', border: '1px solid #e2e8f0'
+  }}>
+    <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, fontWeight: 600 }}>{label}</div>
+  </div>
+);
 
 const StartAntrolSection = ({ selectedDate }) => {
   const [data, setData] = useState(null);
@@ -173,55 +258,61 @@ const StartAntrolSection = ({ selectedDate }) => {
     setLoading(true);
     axios.get('/api/monitoring/start-antrol', { params: { tanggal: selectedDate } })
       .then(r => { if (r.data.success) setData(r.data.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {}).finally(() => setLoading(false));
   }, [selectedDate]);
+
+  const v   = (key) => loading ? '…' : fmt(data?.[key]);
+  const pct = (a, b) => (!loading && data?.[b] > 0) ? ` (${Math.round(data[a] / data[b] * 100)}%)` : '';
 
   return (
     <div>
-      <SectionTitle icon="🎫">Registrasi BPJS & Antrol</SectionTitle>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {/* FIX: field names sesuai controller response */}
-        <StatCard label="Total Antrol"       value={loading ? '…' : fmt(data?.total_antrol)}     color="#7c3aed" sub="MJKN + Non-MJKN" icon="📋" />
-        <StatCard label="Sudah Registrasi"   value={loading ? '…' : fmt(data?.sudah_registrasi)} color="#059669" sub="Selesai checkin"  icon="✅" />
-        <StatCard label="Belum Registrasi"   value={loading ? '…' : fmt(data?.belum_registrasi)} color="#d97706" sub="Belum checkin"    icon="⏳" />
-        <StatCard label="Via MJKN"           value={loading ? '…' : fmt(data?.via_mjkn)}         color="#0891b2" sub={`Selesai: ${fmt(data?.mjkn_selesai)}`} icon="📱" />
-        <StatCard label="SEP Terbit"         value={loading ? '…' : fmt(data?.sep_terbit)}       color="#2563eb" sub={`RJ: ${fmt(data?.sep_ralan)} | RI: ${fmt(data?.sep_ranap)}`} icon="📄" />
+      <SectionTitle icon="🎫">Antrian Per Tanggal JKN</SectionTitle>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <MiniStat label="Total Belum"                               value={v('total_belum')}    color="#92400e" bg="#fef9c3" />
+        <MiniStat label="Total Selesai"                             value={v('total_selesai')}  color="#15803d" bg="#dcfce7" />
+        <MiniStat label="SEP Terbit"                                value={v('sep_terbit')}     color="#1d4ed8" bg="#dbeafe" />
+        <MiniStat label={`JKN Belum${pct('jkn_belum','jkn_total')}`}     value={v('jkn_belum')}    color="#92400e" bg="#fef9c3" />
+        <MiniStat label={`JKN Selesai${pct('jkn_selesai','jkn_total')}`} value={v('jkn_selesai')}  color="#15803d" bg="#dcfce7" />
+        <MiniStat label="Non JKN Belum"                             value={v('non_jkn_belum')}  color="#92400e" bg="#fef9c3" />
+        <MiniStat label="Non JKN Selesai"                           value={v('non_jkn_selesai')} color="#15803d" bg="#dcfce7" />
+        <MiniStat label={`MJKN Belum${pct('mjkn_belum','mjkn_total')}`}   value={v('mjkn_belum')}   color="#92400e" bg="#fef9c3" />
+        <MiniStat label={`MJKN Selesai${pct('mjkn_selesai','mjkn_total')}`} value={v('mjkn_selesai')} color="#15803d" bg="#dcfce7" />
+        <MiniStat label="Record"                                    value={v('record')}         color="#1e293b" bg="#f1f5f9" />
       </div>
-      <div style={{ marginTop: 4 }}>
-        <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 8 }}>
-          📍 Alur Status Pelayanan
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {['3','4','5','6','7','99'].map((tid, idx, arr) => {
-            const t = TASK_LABELS[tid];
-            const keyMap = {
-              '3': 'tunggu_pelayanan', '4': 'dilayani', '5': 'selesai_dilayani',
-              '6': 'tunggu_farmasi',   '7': 'selesai',  '99': 'batal_taskid'
-            };
-            const val = loading ? '…' : fmt(data?.[keyMap[tid]]);
-            return (
-              <React.Fragment key={tid}>
-                <div style={{
-                  background: t.bg, border: `1px solid ${t.color}30`,
-                  borderRadius: 10, padding: '8px 14px', textAlign: 'center', minWidth: 90
-                }}>
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>{t.icon}</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: t.color }}>{val}</div>
-                  <div style={{ fontSize: 10, color: t.color, fontWeight: 600, marginTop: 2 }}>{t.label}</div>
-                </div>
-                {idx < arr.length - 2 && <div style={{ color: '#cbd5e1', fontSize: 18 }}>→</div>}
-                {idx === arr.length - 2 && <div style={{ color: '#fca5a5', fontSize: 14, margin: '0 4px' }}>|</div>}
-              </React.Fragment>
-            );
-          })}
-        </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <MiniStat label="SEP Rawat Jalan"   value={v('sep_ralan')}      color="#0891b2" bg="#e0f2fe" />
+        <MiniStat label="SEP Rawat Inap"    value={v('sep_ranap')}      color="#7c3aed" bg="#ede9fe" />
+        <MiniStat label="Total Batal"       value={v('total_batal')}    color="#b91c1c" bg="#fee2e2" />
+        <MiniStat label="MJKN Total"        value={v('mjkn_total')}     color="#0369a1" bg="#e0f2fe" />
+        <MiniStat label="JKN (Loket) Total" value={v('jkn_total')}      color="#0369a1" bg="#e0f2fe" />
+        <MiniStat label="Non JKN Total"     value={v('non_jkn_total')}  color="#374151" bg="#f1f5f9" />
+      </div>
+      <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 8 }}>
+        📍 Alur Status Pelayanan (MJKN yang sudah Checkin)
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {['3','4','5','6','7','99'].map((tid, idx, arr) => {
+          const t = TASK_LABELS[tid];
+          const keyMap = { '3':'tunggu_pelayanan','4':'dilayani','5':'selesai_dilayani','6':'tunggu_farmasi','7':'selesai','99':'batal_taskid' };
+          const val = loading ? '…' : fmt(data?.[keyMap[tid]]);
+          return (
+            <React.Fragment key={tid}>
+              <div style={{ background: t.bg, border: `1px solid ${t.color}30`, borderRadius: 10, padding: '8px 14px', textAlign: 'center', minWidth: 90 }}>
+                <div style={{ fontSize: 16, marginBottom: 2 }}>{t.icon}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: t.color }}>{val}</div>
+                <div style={{ fontSize: 10, color: t.color, fontWeight: 600, marginTop: 2 }}>{t.label}</div>
+              </div>
+              {idx < arr.length - 2 && <div style={{ color: '#cbd5e1', fontSize: 18 }}>→</div>}
+              {idx === arr.length - 2 && <div style={{ color: '#fca5a5', fontSize: 14, margin: '0 4px' }}>|</div>}
+            </React.Fragment>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-// 3. DETAIL ANTROL TABLE
+// ─── DETAIL ANTROL ───────────────────────────────────────────────────
 const DetailAntrolSection = ({ selectedDate }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -230,125 +321,82 @@ const DetailAntrolSection = ({ selectedDate }) => {
   const perPage = 15;
 
   useEffect(() => {
-    setLoading(true);
-    setPage(1);
+    setLoading(true); setPage(1);
     axios.get('/api/monitoring/detail-antrol', { params: { tanggal: selectedDate, search } })
       .then(r => { if (r.data.success) setData(r.data.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {}).finally(() => setLoading(false));
   }, [selectedDate, search]);
 
-  const filtered = data.slice((page - 1) * perPage, page * perPage);
+  const filtered   = data.slice((page - 1) * perPage, page * perPage);
   const totalPages = Math.ceil(data.length / perPage);
-
-  const isLate = (jamSep, jamPraktek) => {
-    if (!jamSep || !jamPraktek || jamSep === '-' || jamPraktek === '-') return false;
-    return jamSep > jamPraktek;
-  };
+  const isLate     = (a, b) => (!a || !b || a === '-' || b === '-') ? false : a > b;
 
   return (
     <div>
       <SectionTitle icon="📊">Detail Antrol Harian</SectionTitle>
       <div style={{ marginBottom: 12 }}>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Cari nama / no RM / no SEP..."
-          style={{
-            padding: '8px 14px', borderRadius: 8, border: '1px solid #dbeafe',
-            fontSize: 13, width: '280px', outline: 'none'
-          }}
-        />
-        <span style={{ marginLeft: 12, color: '#64748b', fontSize: 13 }}>
-          {data.length} data ditemukan
-        </span>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama / no RM / no SEP..."
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #dbeafe', fontSize: 13, width: '280px', outline: 'none' }} />
+        <span style={{ marginLeft: 12, color: '#64748b', fontSize: 13 }}>{data.length} data ditemukan</span>
       </div>
       {loading ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>Memuat data...</p> : (
         <>
           <TableWrap>
             <thead>
               <tr>
-                <TH>#</TH>
-                <TH>No RM</TH>
-                <TH>Nama Pasien</TH>
-                <TH>No SEP</TH>
-                <TH>Poli</TH>
-                <TH>Dokter</TH>
-                <TH>Jam SEP</TH>
-                <TH>Jam Praktek</TH>
-                <TH>Kesesuaian</TH>
-                <TH>Status Antrol</TH>
-                <TH>Status Alur</TH>
-                <TH>Waktu Task</TH>
-                <TH>Dilayani</TH>
-                <TH>Selesai</TH>
+                <TH>#</TH><TH>No RM</TH><TH>Nama Pasien</TH><TH>No SEP</TH>
+                <TH>Poli</TH><TH>Dokter</TH><TH>Jam SEP</TH><TH>Jam Praktek</TH>
+                <TH>Kesesuaian</TH><TH>Status Antrol</TH><TH>Status Alur</TH>
+                <TH>Waktu Task</TH><TH>Dilayani</TH><TH>Selesai</TH>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={14} style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Tidak ada data</td></tr>
-              ) : filtered.map((row, i) => {
-                const late = isLate(row.jam_sep, row.jam_praktek);
-                return (
-                  <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <TD style={{ color: '#94a3b8' }}>{(page - 1) * perPage + i + 1}</TD>
-                    <TD style={{ fontFamily: 'monospace' }}>{fmt(row.no_rm)}</TD>
-                    <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
-                    <TD style={{ fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.no_sep)}</TD>
-                    <TD>{fmt(row.poli)}</TD>
-                    <TD>{fmt(row.dokter)}</TD>
-                    <TD style={{ fontWeight: 600 }}>{fmtTime(row.jam_sep)}</TD>
-                    <TD>{fmtTime(row.jam_praktek)}</TD>
-                    <TD>
-                      {row.jam_sep && row.jam_sep !== '-' && row.jam_praktek && row.jam_praktek !== '-' ? (
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                          background: late ? '#fee2e2' : '#dcfce7',
-                          color: late ? '#b91c1c' : '#15803d'
-                        }}>
-                          {late ? '⚠️ Telat' : '✅ Sesuai'}
-                        </span>
-                      ) : '-'}
-                    </TD>
-                    <TD><Pill status={row.status} /></TD>
-                    <TD>
-                      {row.last_taskid ? (() => {
-                        const t = TASK_LABELS[String(row.last_taskid)];
-                        return t ? (
-                          <span style={{
-                            padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                            background: t.bg, color: t.color, whiteSpace: 'nowrap'
-                          }}>
-                            {t.icon} {t.label}
-                          </span>
-                        ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>Task {row.last_taskid}</span>;
-                      })() : <span style={{ color: '#cbd5e1', fontSize: 12 }}>-</span>}
-                    </TD>
-                    <TD style={{ fontSize: 12, color: '#64748b' }}>{fmtTime(row.waktu_task)}</TD>
-                    <TD style={{ fontSize: 12 }}>{fmtTime(row.jam_dilayani)}</TD>
-                    <TD style={{ fontSize: 12 }}>{fmtTime(row.jam_selesai)}</TD>
-                  </tr>
-                );
-              })}
+              {filtered.length === 0
+                ? <tr><td colSpan={14} style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Tidak ada data</td></tr>
+                : filtered.map((row, i) => {
+                  const late = isLate(row.jam_sep, row.jam_praktek);
+                  const t    = TASK_LABELS[String(row.last_taskid)] || null;
+                  return (
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <TD style={{ color: '#94a3b8' }}>{(page - 1) * perPage + i + 1}</TD>
+                      <TD style={{ fontFamily: 'monospace' }}>{fmt(row.no_rm)}</TD>
+                      <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
+                      <TD style={{ fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.no_sep)}</TD>
+                      <TD>{fmt(row.poli)}</TD><TD>{fmt(row.dokter)}</TD>
+                      <TD style={{ fontWeight: 600 }}>{fmtTime(row.jam_sep)}</TD>
+                      <TD>{fmtTime(row.jam_praktek)}</TD>
+                      <TD>
+                        {row.jam_sep && row.jam_sep !== '-' && row.jam_praktek && row.jam_praktek !== '-'
+                          ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: late ? '#fee2e2' : '#dcfce7', color: late ? '#b91c1c' : '#15803d' }}>
+                              {late ? '⚠️ Telat' : '✅ Sesuai'}
+                            </span>
+                          : '-'}
+                      </TD>
+                      <TD><Pill status={row.status} /></TD>
+                      <TD>
+                        {t
+                          ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: t.bg, color: t.color, whiteSpace: 'nowrap' }}>{t.icon} {t.label}</span>
+                          : <span style={{ color: '#cbd5e1', fontSize: 12 }}>-</span>}
+                      </TD>
+                      <TD style={{ fontSize: 12, color: '#64748b' }}>{fmtTime(row.waktu_task)}</TD>
+                      <TD style={{ fontSize: 12 }}>{fmtTime(row.jam_dilayani)}</TD>
+                      <TD style={{ fontSize: 12 }}>{fmtTime(row.jam_selesai)}</TD>
+                    </tr>
+                  );
+                })}
             </tbody>
           </TableWrap>
           {totalPages > 1 && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #dbeafe', cursor: 'pointer', background: '#fff', color: '#2563eb', fontWeight: 600 }}>
-                ← Prev
-              </button>
+                style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #dbeafe', cursor: 'pointer', background: '#fff', color: '#2563eb', fontWeight: 600 }}>← Prev</button>
               {Array.from({ length: Math.min(totalPages, 7) }, (_, idx) => idx + 1).map(p => (
                 <button key={p} onClick={() => setPage(p)}
                   style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #dbeafe', cursor: 'pointer',
-                    background: page === p ? '#2563eb' : '#fff', color: page === p ? '#fff' : '#2563eb', fontWeight: 600 }}>
-                  {p}
-                </button>
+                    background: page === p ? '#2563eb' : '#fff', color: page === p ? '#fff' : '#2563eb', fontWeight: 600 }}>{p}</button>
               ))}
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #dbeafe', cursor: 'pointer', background: '#fff', color: '#2563eb', fontWeight: 600 }}>
-                Next →
-              </button>
+                style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #dbeafe', cursor: 'pointer', background: '#fff', color: '#2563eb', fontWeight: 600 }}>Next →</button>
             </div>
           )}
         </>
@@ -357,8 +405,7 @@ const DetailAntrolSection = ({ selectedDate }) => {
   );
 };
 
-// 4. SEP VCLAIM
-// FIX: field names sesuai controller: total, rawatJalan, rawatInap, sepKontrol
+// ─── SEP VCLAIM ──────────────────────────────────────────────────────
 const SepVclaimSection = ({ selectedDate }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -367,15 +414,13 @@ const SepVclaimSection = ({ selectedDate }) => {
     setLoading(true);
     axios.get('/api/monitoring/sep-vclaim', { params: { tanggal: selectedDate } })
       .then(r => { if (r.data.success) setData(r.data.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {}).finally(() => setLoading(false));
   }, [selectedDate]);
 
   return (
     <div>
       <SectionTitle icon="📋">SEP VClaim</SectionTitle>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {/* FIX: total bukan total_sep, rawatJalan bukan rawat_jalan, dst */}
         <StatCard label="Total SEP Terbit" value={loading ? '…' : fmt(data?.total)}      color="#2563eb" icon="📄" />
         <StatCard label="Rawat Jalan"       value={loading ? '…' : fmt(data?.rawatJalan)} color="#0891b2" icon="🏃" />
         <StatCard label="Rawat Inap"        value={loading ? '…' : fmt(data?.rawatInap)}  color="#7c3aed" icon="🛌" />
@@ -385,11 +430,11 @@ const SepVclaimSection = ({ selectedDate }) => {
   );
 };
 
-// 5. SURAT KONTROL
+// ─── SURAT KONTROL ───────────────────────────────────────────────────
 const SuratKontrolSection = ({ selectedDate }) => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tglSep, setTglSep] = useState(selectedDate);
+  const [data, setData]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [tglSep, setTglSep]         = useState(selectedDate);
   const [tglRencana, setTglRencana] = useState('');
 
   const fetchData = useCallback(() => {
@@ -399,24 +444,19 @@ const SuratKontrolSection = ({ selectedDate }) => {
     if (tglRencana) params.tgl_rencana = tglRencana;
     axios.get('/api/monitoring/surat-kontrol', { params })
       .then(r => { if (r.data.success) setData(r.data.data); else setData([]); })
-      .catch(() => setData([]))
-      .finally(() => setLoading(false));
+      .catch(() => setData([])).finally(() => setLoading(false));
   }, [tglSep, tglRencana]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { setTglSep(selectedDate); }, [selectedDate]);
 
-  const sesuaiCount = data.filter(r => r.selisih_hari !== null && r.selisih_hari >= 0).length;
+  const sesuaiCount      = data.filter(r => r.selisih_hari !== null && r.selisih_hari >= 0).length;
   const tidakSesuaiCount = data.filter(r => r.selisih_hari !== null && r.selisih_hari < 0).length;
 
   return (
     <div>
       <SectionTitle icon="📝">Kesesuaian Surat Kontrol</SectionTitle>
-      <div style={{
-        display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end',
-        marginBottom: 16, padding: '14px 16px',
-        background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0'
-      }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16, padding: '14px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
         <div>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>Filter Tgl SEP Terbit</div>
           <input type="date" value={tglSep} onChange={e => setTglSep(e.target.value)}
@@ -442,44 +482,36 @@ const SuratKontrolSection = ({ selectedDate }) => {
       {loading ? <p style={{ color: '#94a3b8', textAlign: 'center', padding: 30 }}>Memuat data...</p> : (
         <TableWrap>
           <thead>
-            <tr>
-              <TH>No RM</TH><TH>Nama</TH><TH>Poli</TH><TH>Dokter</TH>
-              <TH>No Surat Kontrol</TH><TH>Tgl Surat</TH><TH>Tgl Rencana</TH>
-              <TH>No SEP</TH><TH>Tgl SEP</TH><TH>Selisih (hari)</TH><TH>Kesesuaian</TH>
-            </tr>
+            <tr><TH>No RM</TH><TH>Nama</TH><TH>Poli</TH><TH>Dokter</TH><TH>No Surat Kontrol</TH><TH>Tgl Surat</TH><TH>Tgl Rencana</TH><TH>No SEP</TH><TH>Tgl SEP</TH><TH>Selisih (hari)</TH><TH>Kesesuaian</TH></tr>
           </thead>
           <tbody>
-            {data.length === 0 ? (
-              <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Tidak ada data — coba ubah filter tanggal</td></tr>
-            ) : data.map((row, i) => {
-              const selisih = row.selisih_hari;
-              const sesuai = selisih !== null && selisih >= 0;
-              return (
-                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                  <TD style={{ fontFamily: 'monospace', fontSize: 12 }}>{fmt(row.no_rm)}</TD>
-                  <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
-                  <TD style={{ fontSize: 12 }}>{fmt(row.poli)}</TD>
-                  <TD style={{ fontSize: 12 }}>{fmt(row.dokter)}</TD>
-                  <TD style={{ fontSize: 11, fontFamily: 'monospace' }}>{fmt(row.no_surat)}</TD>
-                  <TD>{fmt(row.tgl_surat)}</TD>
-                  <TD style={{ fontWeight: 600, color: '#2563eb' }}>{fmt(row.tgl_rencana)}</TD>
-                  <TD style={{ fontSize: 11, fontFamily: 'monospace' }}>{fmt(row.no_sep)}</TD>
-                  <TD>{fmt(row.tgl_sep)}</TD>
-                  <TD style={{ textAlign: 'center', fontWeight: 700, color: selisih < 0 ? '#dc2626' : '#64748b' }}>
-                    {selisih !== null ? (selisih < 0 ? `${selisih}` : `+${selisih}`) : '-'}
-                  </TD>
-                  <TD>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                      background: sesuai ? '#dcfce7' : '#fee2e2',
-                      color: sesuai ? '#15803d' : '#b91c1c'
-                    }}>
-                      {sesuai ? '✅ Sesuai' : selisih === null ? '❓ N/A' : '⚠️ Tidak Sesuai'}
-                    </span>
-                  </TD>
-                </tr>
-              );
-            })}
+            {data.length === 0
+              ? <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Tidak ada data — coba ubah filter tanggal</td></tr>
+              : data.map((row, i) => {
+                const selisih = row.selisih_hari;
+                const sesuai  = selisih !== null && selisih >= 0;
+                return (
+                  <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <TD style={{ fontFamily: 'monospace', fontSize: 12 }}>{fmt(row.no_rm)}</TD>
+                    <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
+                    <TD style={{ fontSize: 12 }}>{fmt(row.poli)}</TD>
+                    <TD style={{ fontSize: 12 }}>{fmt(row.dokter)}</TD>
+                    <TD style={{ fontSize: 11, fontFamily: 'monospace' }}>{fmt(row.no_surat)}</TD>
+                    <TD>{fmt(row.tgl_surat)}</TD>
+                    <TD style={{ fontWeight: 600, color: '#2563eb' }}>{fmt(row.tgl_rencana)}</TD>
+                    <TD style={{ fontSize: 11, fontFamily: 'monospace' }}>{fmt(row.no_sep)}</TD>
+                    <TD>{fmt(row.tgl_sep)}</TD>
+                    <TD style={{ textAlign: 'center', fontWeight: 700, color: selisih < 0 ? '#dc2626' : '#64748b' }}>
+                      {selisih !== null ? (selisih < 0 ? `${selisih}` : `+${selisih}`) : '-'}
+                    </TD>
+                    <TD>
+                      <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: sesuai ? '#dcfce7' : '#fee2e2', color: sesuai ? '#15803d' : '#b91c1c' }}>
+                        {sesuai ? '✅ Sesuai' : selisih === null ? '❓ N/A' : '⚠️ Tidak Sesuai'}
+                      </span>
+                    </TD>
+                  </tr>
+                );
+              })}
           </tbody>
         </TableWrap>
       )}
@@ -487,64 +519,53 @@ const SuratKontrolSection = ({ selectedDate }) => {
   );
 };
 
-// 6. JADWAL OPERASI (TMO)
+// ─── JADWAL OPERASI ──────────────────────────────────────────────────
 const JadwalOperasiSection = ({ selectedDate }) => {
-  const [data, setData] = useState([]);
+  const [data, setData]     = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     axios.get('/api/monitoring/jadwal-operasi', { params: { tanggal: selectedDate } })
       .then(r => { if (r.data.success) setData(r.data.data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {}).finally(() => setLoading(false));
   }, [selectedDate]);
-
-  const total = data.length;
-  const selesai = data.filter(d => d.status_operasi === 'Selesai').length;
-  const proses = data.filter(d => d.status_operasi === 'Proses').length;
 
   return (
     <div>
       <SectionTitle icon="🔪">Jadwal Operasi (TMO)</SectionTitle>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <StatCard label="Total TMO" value={loading ? '…' : total} color="#7c3aed" icon="🔪" />
-        <StatCard label="Selesai"   value={loading ? '…' : selesai} color="#059669" icon="✅" />
-        <StatCard label="Proses"    value={loading ? '…' : proses}  color="#d97706" icon="⏳" />
+        <StatCard label="Total TMO" value={loading ? '…' : data.length}                                        color="#7c3aed" icon="🔪" />
+        <StatCard label="Selesai"   value={loading ? '…' : data.filter(d => d.status_operasi === 'Selesai').length} color="#059669" icon="✅" />
+        <StatCard label="Proses"    value={loading ? '…' : data.filter(d => d.status_operasi === 'Proses').length}  color="#d97706" icon="⏳" />
       </div>
       {loading ? <p style={{ color: '#94a3b8', textAlign: 'center' }}>Memuat data...</p> : (
         <TableWrap>
           <thead>
-            <tr>
-              <TH>#</TH><TH>No RM</TH><TH>Nama</TH><TH>No Rawat</TH>
-              <TH>Tgl Operasi</TH><TH>Jam Mulai</TH><TH>Jenis Operasi</TH>
-              <TH>Dokter Operator</TH><TH>Status</TH>
-            </tr>
+            <tr><TH>#</TH><TH>No RM</TH><TH>Nama</TH><TH>No Rawat</TH><TH>Tgl Operasi</TH><TH>Jam Mulai</TH><TH>Jenis Operasi</TH><TH>Dokter Operator</TH><TH>Status</TH></tr>
           </thead>
           <tbody>
-            {data.length === 0 ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Tidak ada jadwal operasi</td></tr>
-            ) : data.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                <TD style={{ color: '#94a3b8' }}>{i + 1}</TD>
-                <TD style={{ fontFamily: 'monospace' }}>{fmt(row.no_rm)}</TD>
-                <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
-                <TD style={{ fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.no_rawat)}</TD>
-                <TD>{fmt(row.tgl_operasi)}</TD>
-                <TD style={{ fontWeight: 700 }}>{fmtTime(row.jam_mulai)}</TD>
-                <TD>{fmt(row.jenis_operasi)}</TD>
-                <TD>{fmt(row.dokter_operator)}</TD>
-                <TD>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    background: row.status_operasi === 'Selesai' ? '#dcfce7' : row.status_operasi === 'Proses' ? '#fef9c3' : '#f1f5f9',
-                    color: row.status_operasi === 'Selesai' ? '#15803d' : row.status_operasi === 'Proses' ? '#92400e' : '#64748b'
-                  }}>
-                    {fmt(row.status_operasi)}
-                  </span>
-                </TD>
-              </tr>
-            ))}
+            {data.length === 0
+              ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Tidak ada jadwal operasi</td></tr>
+              : data.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <TD style={{ color: '#94a3b8' }}>{i + 1}</TD>
+                  <TD style={{ fontFamily: 'monospace' }}>{fmt(row.no_rm)}</TD>
+                  <TD style={{ fontWeight: 600 }}>{fmt(row.nama)}</TD>
+                  <TD style={{ fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.no_rawat)}</TD>
+                  <TD>{fmt(row.tgl_operasi)}</TD>
+                  <TD style={{ fontWeight: 700 }}>{fmtTime(row.jam_mulai)}</TD>
+                  <TD>{fmt(row.jenis_operasi)}</TD>
+                  <TD>{fmt(row.dokter_operator)}</TD>
+                  <TD>
+                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                      background: row.status_operasi === 'Selesai' ? '#dcfce7' : row.status_operasi === 'Proses' ? '#fef9c3' : '#f1f5f9',
+                      color: row.status_operasi === 'Selesai' ? '#15803d' : row.status_operasi === 'Proses' ? '#92400e' : '#64748b' }}>
+                      {fmt(row.status_operasi)}
+                    </span>
+                  </TD>
+                </tr>
+              ))}
           </tbody>
         </TableWrap>
       )}
@@ -552,10 +573,7 @@ const JadwalOperasiSection = ({ selectedDate }) => {
   );
 };
 
-
-// ─────────────────────────────────────────────
-// TAB ANTROL — Antrian Per Tanggal Mobile JKN
-// ─────────────────────────────────────────────
+// ─── ANTROL TAB ──────────────────────────────────────────────────────
 const STATUS_ANTROL = {
   'Checkin':          { bg: '#dcfce7', color: '#15803d', label: 'Checkin' },
   'Belum':            { bg: '#fef9c3', color: '#92400e', label: 'Belum' },
@@ -565,23 +583,16 @@ const STATUS_ANTROL = {
   'Belum dilayani':   { bg: '#fef9c3', color: '#92400e', label: 'Belum dilayani' },
 };
 
-const TASKID_STATUS = {
-  '3': 'Tunggu Pelayanan', '4': 'Sedang Dilayani',
-  '5': 'Pelayanan Selesai', '6': 'Tunggu Farmasi',
-  '7': 'Farmasi Selesai',  '99': 'Batal',
-};
-
 const AntrolTab = ({ selectedDate }) => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [data, setData]                 = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [page, setPage] = useState(1);
+  const [page, setPage]                 = useState(1);
   const perPage = 20;
 
   useEffect(() => {
-    setLoading(true);
-    setPage(1);
+    setLoading(true); setPage(1);
     axios.get('/api/monitoring/antrol-pertanggal', {
       params: { tanggal: selectedDate, search, status: filterStatus }
     })
@@ -590,20 +601,20 @@ const AntrolTab = ({ selectedDate }) => {
       .finally(() => setLoading(false));
   }, [selectedDate, search, filterStatus]);
 
-  const filtered = data.slice((page - 1) * perPage, page * perPage);
+  const filtered   = data.slice((page - 1) * perPage, page * perPage);
   const totalPages = Math.ceil(data.length / perPage);
 
-  // FIX: status dari API BPJS bisa 'Selesai dilayani' atau 'Checkin', normalkan dulu
-  const isSelesai = (r) => r.status === 'Checkin' || r.status === 'Selesai dilayani';
-  const isBelum   = (r) => r.status === 'Belum'   || r.status === 'Belum dilayani';
+  // ── Footer stats: selesai = taskid 5 atau 7 ──────────────────────
+  const isSelesai  = (r) => ['5','7'].includes(String(r.last_taskid));
+  const isBelum    = (r) => !isSelesai(r) && String(r.last_taskid) !== '99' && r.status !== 'Batal';
+  const isBatal    = (r) => r.status === 'Batal' || String(r.last_taskid) === '99';
+  const hasSep     = (r) => r.no_sep && r.no_sep !== '-' && r.no_sep !== null;
+  const isMjkn     = (r) => r.sumber === 'Mobile JKN' || r.sumber === 'MJKN';
 
-  const totalBelum     = data.filter(isBelum).length;
   const totalSelesai   = data.filter(isSelesai).length;
-  const totalBatal     = data.filter(r => r.status === 'Batal').length;
-  const sepTerbit      = data.filter(r => r.no_sep && r.no_sep !== '-').length;
-
-  // FIX: sumber dari DB lokal = 'Mobile JKN', dari API = bisa 'Mobile JKN' atau field sumberdata
-  const isMjkn = (r) => r.sumber === 'Mobile JKN' || r.sumber === 'MJKN';
+  const totalBelum     = data.filter(isBelum).length;
+  const totalBatal     = data.filter(isBatal).length;
+  const sepTerbit      = data.filter(hasSep).length;
   const mjknTotal      = data.filter(isMjkn).length;
   const mjknSelesai    = data.filter(r => isMjkn(r) && isSelesai(r)).length;
   const mjknBelum      = data.filter(r => isMjkn(r) && isBelum(r)).length;
@@ -612,23 +623,12 @@ const AntrolTab = ({ selectedDate }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Filter bar */}
-      <div style={{
-        background: '#fff', borderRadius: 14, padding: '16px 20px',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-        display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center'
-      }}>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Cari nama / no RM / no booking / NIK..."
-          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #dbeafe', fontSize: 13, width: 280, outline: 'none' }}
-        />
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #dbeafe', fontSize: 13, outline: 'none' }}
-        >
+      {/* Filter */}
+      <div style={{ background: '#fff', borderRadius: 14, padding: '16px 20px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama / no RM / no booking / NIK..."
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #dbeafe', fontSize: 13, width: 280, outline: 'none' }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #dbeafe', fontSize: 13, outline: 'none' }}>
           <option value="">Semua Status</option>
           <option value="Belum">Belum</option>
           <option value="Checkin">Checkin</option>
@@ -640,9 +640,7 @@ const AntrolTab = ({ selectedDate }) => {
 
       {/* Tabel */}
       <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        {loading ? (
-          <p style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Memuat data...</p>
-        ) : (
+        {loading ? <p style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Memuat data...</p> : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 1200 }}>
               <thead>
@@ -668,65 +666,51 @@ const AntrolTab = ({ selectedDate }) => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={18} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Tidak ada data</td></tr>
-                ) : filtered.map((row, i) => {
-                  const stAntrol = STATUS_ANTROL[row.status] || { bg: '#f1f5f9', color: '#64748b', label: row.status || '-' };
-                  const tl       = TASK_LABELS[String(row.last_taskid)] || null;
-                  const mjkn     = isMjkn(row);
-                  return (
-                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={tdStyle}>{(page-1)*perPage+i+1}</td>
-                      {/* FIX: nobooking (DB lokal) atau kodebooking (sudah dinormalize ke nobooking di controller) */}
-                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nobooking)}</td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{fmt(row.no_rm)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(row.nama)}</td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nomorkartu)}</td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nik)}</td>
-                      <td style={tdStyle}>{fmt(row.nm_poli)}</td>
-                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{fmt(row.nm_dokter)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.jampraktek)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.tanggalperiksa)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700 }}>{fmt(row.nomorantrean)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.estimasidilayani)}</td>
-                      <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(row.jeniskunjungan)}</td>
-                      <td style={tdStyle}>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                          background: mjkn ? '#ede9fe' : '#f1f5f9',
-                          color: mjkn ? '#7c3aed' : '#64748b'
-                        }}>
-                          {mjkn ? '📱 MJKN' : '🖥️ Loket'}
-                        </span>
-                      </td>
-                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 10 }}>{fmt(row.no_sep)}</td>
-                      <td style={tdStyle}>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                          background: stAntrol.bg, color: stAntrol.color
-                        }}>
-                          {stAntrol.label}
-                        </span>
-                      </td>
-                      <td style={tdStyle}>
-                        {tl ? (
-                          <span style={{
-                            padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                            background: tl.bg, color: tl.color, whiteSpace: 'nowrap'
-                          }}>
-                            {tl.icon} {tl.label}
+                {filtered.length === 0
+                  ? <tr><td colSpan={18} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Tidak ada data</td></tr>
+                  : filtered.map((row, i) => {
+                    const stAntrol = STATUS_ANTROL[row.status] || { bg: '#f1f5f9', color: '#64748b', label: row.status || '-' };
+                    const tl       = TASK_LABELS[String(row.last_taskid || '')] || null;
+                    const mjkn     = isMjkn(row);
+                    return (
+                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={tdStyle}>{(page-1)*perPage+i+1}</td>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nobooking)}</td>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace' }}>{fmt(row.no_rm)}</td>
+                        <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(row.nama)}</td>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nomorkartu)}</td>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11 }}>{fmt(row.nik)}</td>
+                        <td style={tdStyle}>{fmt(row.nm_poli)}</td>
+                        <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{fmt(row.nm_dokter)}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.jampraktek)}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.tanggalperiksa)}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700 }}>{fmt(row.nomorantrean)}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>{fmt(row.estimasidilayani)}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(row.jeniskunjungan)}</td>
+                        <td style={tdStyle}>
+                          <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: mjkn ? '#ede9fe' : '#f1f5f9', color: mjkn ? '#7c3aed' : '#64748b' }}>
+                            {mjkn ? '📱 MJKN' : '🖥️ Loket'}
                           </span>
-                        ) : <span style={{ color: '#cbd5e1' }}>-</span>}
-                      </td>
-                      <td style={{ ...tdStyle, fontSize: 11, color: '#94a3b8' }}>{fmt(row.waktu_booking)}</td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 10 }}>{fmt(row.no_sep)}</td>
+                        <td style={tdStyle}>
+                          <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: stAntrol.bg, color: stAntrol.color }}>
+                            {stAntrol.label}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          {tl
+                            ? <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: tl.bg, color: tl.color, whiteSpace: 'nowrap' }}>{tl.icon} {tl.label}</span>
+                            : <span style={{ color: '#cbd5e1' }}>-</span>}
+                        </td>
+                        <td style={{ ...tdStyle, fontSize: 11, color: '#94a3b8' }}>{fmt(row.waktu_booking)}</td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
         )}
-
         {totalPages > 1 && (
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', padding: '12px 0', flexWrap: 'wrap' }}>
             <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1}
@@ -734,9 +718,7 @@ const AntrolTab = ({ selectedDate }) => {
             {Array.from({ length: Math.min(totalPages, 10) }, (_, idx) => idx+1).map(p => (
               <button key={p} onClick={() => setPage(p)}
                 style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid #dbeafe', cursor: 'pointer',
-                  background: page===p ? '#2563eb' : '#fff', color: page===p ? '#fff' : '#2563eb', fontWeight: 600 }}>
-                {p}
-              </button>
+                  background: page===p ? '#2563eb' : '#fff', color: page===p ? '#fff' : '#2563eb', fontWeight: 600 }}>{p}</button>
             ))}
             <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page===totalPages}
               style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #dbeafe', cursor: 'pointer', background: '#fff', color: '#2563eb' }}>Next →</button>
@@ -744,11 +726,8 @@ const AntrolTab = ({ selectedDate }) => {
         )}
       </div>
 
-      {/* Footer stats */}
-      <div style={{
-        background: '#1e40af', borderRadius: 14, padding: '14px 20px',
-        display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center'
-      }}>
+      {/* Footer stats — selesai = taskid 5 atau 7 */}
+      <div style={{ background: '#1e40af', borderRadius: 14, padding: '14px 20px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         {[
           { label: 'Total Belum',      value: totalBelum,     color: '#fef9c3' },
           { label: 'Total Selesai',    value: totalSelesai,   color: '#bbf7d0' },
@@ -759,6 +738,7 @@ const AntrolTab = ({ selectedDate }) => {
           { label: 'MJKN Belum',       value: mjknBelum,      color: '#fef9c3' },
           { label: 'Non-MJKN Selesai', value: nonMjknSelesai, color: '#bbf7d0' },
           { label: 'Non-MJKN Belum',   value: nonMjknBelum,   color: '#fef9c3' },
+          { label: 'Record',           value: data.length,    color: '#e0f2fe' },
         ].map((s, i) => (
           <div key={i} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
@@ -767,9 +747,7 @@ const AntrolTab = ({ selectedDate }) => {
         ))}
         {mjknTotal > 0 && (
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#bbf7d0' }}>
-              {Math.round(mjknSelesai/mjknTotal*100)}%
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#bbf7d0' }}>{Math.round(mjknSelesai/mjknTotal*100)}%</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>MJKN Selesai %</div>
           </div>
         )}
@@ -778,16 +756,10 @@ const AntrolTab = ({ selectedDate }) => {
   );
 };
 
-const thStyle = {
-  padding: '10px 12px', textAlign: 'left', fontWeight: 700,
-  color: '#1e40af', borderBottom: '2px solid #dbeafe',
-  whiteSpace: 'nowrap', fontSize: 12
-};
+const thStyle = { padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: '#1e40af', borderBottom: '2px solid #dbeafe', whiteSpace: 'nowrap', fontSize: 12 };
 const tdStyle = { padding: '9px 12px', color: '#374151' };
 
-// ─────────────────────────────────────────────
-// NAV TABS
-// ─────────────────────────────────────────────
+// ─── TABS ────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'overview',      label: 'Overview',           icon: '📊' },
   { id: 'antrol_detail', label: 'Antrol per Tanggal', icon: '🎫' },
@@ -797,25 +769,20 @@ const TABS = [
   { id: 'operasi',       label: 'Jadwal Operasi',      icon: '🔪' },
 ];
 
-// ─────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────
+// ─── MAIN PAGE ───────────────────────────────────────────────────────
 function MonitoringPage() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab]       = useState('overview');
   const [selectedDate, setSelectedDate] = useState(today());
 
+  const wrap = (children) => (
+    <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+      {children}
+    </div>
+  );
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(160deg, #f0f7ff 0%, #e8f4fd 50%, #f0fdf4 100%)',
-      fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
-    }}>
-      {/* TOP BAR */}
-      <div style={{
-        background: 'linear-gradient(90deg, #1e40af, #1d4ed8)',
-        color: '#fff', padding: '0 24px',
-        boxShadow: '0 4px 20px rgba(30,64,175,0.3)'
-      }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #f0f7ff 0%, #e8f4fd 50%, #f0fdf4 100%)', fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif' }}>
+      <div style={{ background: 'linear-gradient(90deg, #1e40af, #1d4ed8)', color: '#fff', padding: '0 24px', boxShadow: '0 4px 20px rgba(30,64,175,0.3)' }}>
         <div style={{ maxWidth: 1400, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -827,19 +794,11 @@ function MonitoringPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <label style={{ fontSize: 12, opacity: 0.8 }}>Tanggal:</label>
-              <input
-                type="date" value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                style={{
-                  padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)',
-                  background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, cursor: 'pointer', outline: 'none'
-                }}
-              />
-              <a href="/bookingbpjs" style={{
-                padding: '6px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.15)',
-                color: '#fff', fontSize: 12, fontWeight: 600, textDecoration: 'none',
-                border: '1px solid rgba(255,255,255,0.3)'
-              }}>🎫 Booking Antrol</a>
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, cursor: 'pointer', outline: 'none' }} />
+              <a href="/bookingbpjs" style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 12, fontWeight: 600, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.3)' }}>
+                🎫 Booking Antrol
+              </a>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 2, marginTop: 16, overflowX: 'auto' }}>
@@ -850,58 +809,36 @@ function MonitoringPage() {
                 color: '#fff', fontSize: 13, fontWeight: activeTab === tab.id ? 700 : 400,
                 borderBottom: activeTab === tab.id ? '3px solid #93c5fd' : '3px solid transparent',
                 borderRadius: '6px 6px 0 0', whiteSpace: 'nowrap', transition: 'all 0.15s'
-              }}>
-                {tab.icon} {tab.label}
-              </button>
+              }}>{tab.icon} {tab.label}</button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* CONTENT */}
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 24px' }}>
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <StartAntrolSection selectedDate={selectedDate} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <SepVclaimSection selectedDate={selectedDate} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <DetailAntrolSection selectedDate={selectedDate} />
-            </div>
+            {wrap(<StartAntrolSection selectedDate={selectedDate} />)}
+            {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
+            {wrap(<DetailAntrolSection selectedDate={selectedDate} />)}
           </div>
         )}
-        {activeTab === 'tt' && (
-          <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-            <TempurTidurSection />
-          </div>
-        )}
+        {activeTab === 'tt' && wrap(
+  <>
+    <TempurTidurSection />
+    <BorTargetSection />
+  </>
+)}
         {activeTab === 'antrol_detail' && <AntrolTab selectedDate={selectedDate} />}
         {activeTab === 'sep' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <StartAntrolSection selectedDate={selectedDate} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <SepVclaimSection selectedDate={selectedDate} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <DetailAntrolSection selectedDate={selectedDate} />
-            </div>
+            {wrap(<StartAntrolSection selectedDate={selectedDate} />)}
+            {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
+            {wrap(<DetailAntrolSection selectedDate={selectedDate} />)}
           </div>
         )}
-        {activeTab === 'surat_kontrol' && (
-          <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-            <SuratKontrolSection selectedDate={selectedDate} />
-          </div>
-        )}
-        {activeTab === 'operasi' && (
-          <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-            <JadwalOperasiSection selectedDate={selectedDate} />
-          </div>
-        )}
+        {activeTab === 'surat_kontrol' && wrap(<SuratKontrolSection selectedDate={selectedDate} />)}
+        {activeTab === 'operasi'       && wrap(<JadwalOperasiSection selectedDate={selectedDate} />)}
       </div>
     </div>
   );

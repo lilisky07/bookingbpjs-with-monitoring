@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AntreanListController;
 use App\Http\Controllers\Api\PublicAntreanController;
-use App\Http\Controllers\Api\NpsLaporanController;
 use App\Http\Controllers\Api\MonitoringController;
 
 /*
@@ -40,6 +39,7 @@ use App\Http\Controllers\Api\MonitoringController;
         Route::get('/surat-kontrol',  [MonitoringController::class, 'suratKontrol']);
         Route::get('/jadwal-operasi', [MonitoringController::class, 'jadwalOperasi']);
         Route::get('/antrol-pertanggal', [MonitoringController::class, 'antrolPertanggal']);
+        Route::get('/bor', [MonitoringController::class, 'borDashboard']);
         Route::get('/test-bpjs', function() {
     $service = new \App\Services\BpjsAntreanService();
     $result = $service->getAntreanByTanggal('2026-05-07');
