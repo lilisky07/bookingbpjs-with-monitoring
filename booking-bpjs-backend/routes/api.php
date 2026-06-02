@@ -40,6 +40,8 @@ use App\Http\Controllers\Api\MonitoringController;
         Route::get('/jadwal-operasi', [MonitoringController::class, 'jadwalOperasi']);
         Route::get('/antrol-pertanggal', [MonitoringController::class, 'antrolPertanggal']);
         Route::get('/bor', [MonitoringController::class, 'borDashboard']);
+        Route::post('/sync-taskid', [MonitoringController::class, 'syncTaskId']);
+        Route::get('/taskid/{nobooking}', [MonitoringController::class, 'getTaskId']);
         Route::get('/test-bpjs', function() {
     $service = new \App\Services\BpjsAntreanService();
     $result = $service->getAntreanByTanggal('2026-05-07');

@@ -23,7 +23,7 @@ class BpjsAntreanService
     // ─── Auth headers HMAC-SHA256 ────────────────────────────────────
     private function getHeaders(): array
     {
-        $timestamp = (string) time();
+        $timestamp = (string) (time() - strtotime('1970-01-01 00:00:00'));
 
         $signature = base64_encode(
             hash_hmac(
@@ -50,7 +50,7 @@ class BpjsAntreanService
     // ─── Dekripsi BPJS AES-256-CBC ──────────────────────────────────
     // Formula mengikuti Mobile JKN / Khanza:
     // key = SHA256(consid + secretKey + timestamp)
-    private function decrypt(string $encryptedData, string $timestamp): ?array
+    public function decrypt(string $encryptedData, string $timestamp): ?array
     {
         try {
 
@@ -80,17 +80,13 @@ class BpjsAntreanService
             }
 
             // ── Handle kemungkinan compressed response ───────────────
-            $jsonString = $decrypted;
+           // Decompress LZ-string (wajib untuk response BPJS)
+$jsonString = \LZCompressor\LZString::decompressFromEncodedURIComponent($decrypted);
 
-            // BPJS kadang compress
-            if (function_exists('gzdecode')) {
-
-                $decodedGzip = @gzdecode($decrypted);
-
-                if ($decodedGzip !== false) {
-                    $jsonString = $decodedGzip;
-                }
-            }
+if (!$jsonString) {
+    Log::warning('BPJS lzstring decompress failed, trying raw');
+    $jsonString = $decrypted;
+}
 
             $json = json_decode($jsonString, true);
 
@@ -189,9 +185,16 @@ class BpjsAntreanService
     // GET /antrean/pendaftaran/tanggal/{tanggal}
     public function getAntreanByTanggal(string $tanggal): array
     {
-        return $this->get(
-            "/antrean/pendaftaran/tanggal/{$tanggal}"
-        );
+        {
+    $result = $this->get("/antrean/pendaftaran/tanggal/{$tanggal}");
+    Log::info('BPJS getAntreanByTanggal', [
+        'code'     => $result['metadata']['code'] ?? null,
+        'is_array' => is_array($result['response'] ?? null),
+        'count'    => is_array($result['response'] ?? null) ? count($result['response']) : 'bukan array',
+    ]);
+    return $result;
+}
+
     }
 
     // ─── Antrian per tanggal + poli + dokter ────────────────────────
@@ -212,4 +215,37 @@ class BpjsAntreanService
             "/antrean/status/{$noBooking}"
         );
     }
+    // ─── List waktu task id per booking ─────────────────────────────
+// POST /antrean/getlisttask
+public function getListTask(string $kodebooking): array
+{
+    try {
+        $auth = $this->getHeaders();
+
+        $response = Http::withHeaders($auth['headers'])
+            ->timeout(15)
+            ->post($this->baseUrl . '/antrean/getlisttask', [
+                'kodebooking' => $kodebooking
+            ]);
+
+        if (!$response->successful()) {
+            return ['error' => $response->body(), 'status' => $response->status()];
+        }
+
+        $json = $response->json();
+
+        if (isset($json['response']) && is_string($json['response'])) {
+            $decrypted = $this->decrypt($json['response'], $auth['timestamp']);
+            if ($decrypted !== null) {
+                return array_merge($json, ['response' => $decrypted]);
+            }
+        }
+
+        return $json ?? [];
+
+    } catch (\Exception $e) {
+        Log::error('BPJS getListTask exception', ['msg' => $e->getMessage()]);
+        return ['error' => $e->getMessage()];
+    }
+}
 }

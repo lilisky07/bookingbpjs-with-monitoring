@@ -133,28 +133,30 @@ public function borDashboard(Request $request)
 
             // ══════════════════════════════════════════════════════════
             // BLOK 1 — DATA MJKN (referensi_mobilejkn_bpjs)
-            // Definisi sama dengan SIM RS Khanza:
-            //   Record   = semua baris di tabel per tanggal
-            //   Belum    = status 'Belum'
-            //   Checkin  = status 'Checkin'  (= "Selesai" di SIM RS)
-            //   Batal    = status 'Batal'
             // ══════════════════════════════════════════════════════════
+            
             $mjknStats = DB::select("
-                SELECT
-                    COUNT(*)                                        AS record,
-                    SUM(status = 'Belum')                          AS mjkn_belum,
-                    SUM(status = 'Checkin')                        AS mjkn_selesai,
-                    SUM(status = 'Batal')                          AS mjkn_batal,
-                    SUM(status = 'Gagal')                          AS mjkn_gagal
-                FROM referensi_mobilejkn_bpjs
-                WHERE DATE(tanggalperiksa) = ?
-            ", [$tanggal]);
+    SELECT
+        COUNT(*)                AS record,
+        SUM(status = 'Belum')   AS mjkn_belum,
+        SUM(status = 'Checkin') AS mjkn_selesai,
+        SUM(status = 'Batal')   AS mjkn_batal,
+        SUM(status = 'Gagal')   AS mjkn_gagal
+    FROM referensi_mobilejkn_bpjs
+    WHERE DATE(tanggalperiksa) = ?
+", [$tanggal]);
+
+            $batalCount = DB::table('referensi_mobilejkn_bpjs_batal as rbb')
+                ->leftJoin('referensi_mobilejkn_bpjs as rmb', 'rmb.nobooking', '=', 'rbb.nobooking')
+                ->whereDate('rmb.tanggalperiksa', $tanggal)
+                ->count();
 
             $m = $mjknStats[0];
-            $record       = (int)$m->record;
-            $mjknBelum    = (int)$m->mjkn_belum;
-            $mjknSelesai  = (int)$m->mjkn_selesai;
-            $mjknBatal    = (int)$m->mjkn_batal;
+            $record      = (int)$m->record + $batalCount;
+            $mjknBelum   = (int)($m->mjkn_belum ?? 0);
+            $mjknSelesai = (int)($m->mjkn_selesai ?? 0);
+            $mjknBatal   = (int)($m->mjkn_batal ?? 0) + $batalCount;
+            $mjknGagal   = (int)($m->mjkn_gagal ?? 0);
 
             // ══════════════════════════════════════════════════════════
             // BLOK 2 — DATA JKN NON-MJKN
@@ -214,7 +216,7 @@ public function borDashboard(Request $request)
             // ══════════════════════════════════════════════════════════
             $totalBelum   = $mjknBelum + $jknBelum;
             $totalSelesai = $mjknSelesai + $jknSelesai;
-            $totalBatal   = $mjknBatal + $jknStats[0]->jkn_batal;
+            $totalBatal   = $mjknBatal + $j->jkn_batal;
 
             // ══════════════════════════════════════════════════════════
             // BLOK 5 — SEP TERBIT
@@ -223,14 +225,16 @@ public function borDashboard(Request $request)
             // Ini yang bikin angka SIM RS beda dengan COUNT(*) bridging_sep
             // ══════════════════════════════════════════════════════════
             $sepStats = DB::select("
-                SELECT
-                    COUNT(*)                          AS sep_terbit,
-                    SUM(bs.jnspelayanan = '1')        AS sep_ralan,
-                    SUM(bs.jnspelayanan = '2')        AS sep_ranap
-                FROM bridging_sep bs
-                INNER JOIN reg_periksa rp ON rp.no_rawat = bs.no_rawat
-                WHERE DATE(rp.tgl_registrasi) = ?
-            ", [$tanggal]);
+    SELECT
+        COUNT(*)                          AS sep_terbit,
+        SUM(bs.jnspelayanan = '1')        AS sep_ralan,
+        SUM(bs.jnspelayanan = '2')        AS sep_ranap
+    FROM bridging_sep bs
+    INNER JOIN reg_periksa rp ON rp.no_rawat = bs.no_rawat
+    WHERE DATE(rp.tgl_registrasi) = ?
+    AND bs.jnspelayanan = '2'
+    AND bs.kdpolitujuan != 'IGD'
+", [$tanggal]);
 
             $s = $sepStats[0];
             $sepTerbit = (int)$s->sep_terbit;
@@ -477,107 +481,213 @@ public function borDashboard(Request $request)
     }
 
 
+public function syncTaskId(Request $request): JsonResponse
+{
+    try {
+        $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
 
+        $rows = DB::table('referensi_mobilejkn_bpjs')
+            ->whereDate('tanggalperiksa', $tanggal)
+            ->whereNotNull('no_rawat')
+            ->select('nobooking', 'no_rawat')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Tidak ada data untuk tanggal tersebut']);
+        }
+
+        $service  = new \App\Services\BpjsAntreanService();
+        $berhasil = 0;
+        $gagal    = 0;
+        $errors   = [];
+
+        foreach ($rows as $row) {
+            try {
+                $result = $service->getListTask($row->nobooking);
+
+                if (isset($result['error'])) {
+                    $gagal++;
+                    $errors[] = $row->nobooking . ': ' . $result['error'];
+                    continue;
+                }
+
+                $list = $result['response']['list'] ?? [];
+
+                foreach ($list as $task) {
+                    $taskid = (string)($task['taskid'] ?? null);
+                    $waktu  = $task['wakturs'] ?? null;
+
+                    if (!$taskid || !$row->no_rawat) continue;
+
+                    $waktuFormatted = null;
+                    if ($waktu) {
+                        $waktuClean     = str_replace(' WIB', '', $waktu);
+                        $waktuFormatted = \Carbon\Carbon::createFromFormat('d-m-Y H:i:s', $waktuClean)
+                                            ->format('Y-m-d H:i:s');
+                    }
+
+                    DB::table('referensi_mobilejkn_bpjs_taskid')->insertOrIgnore([
+                        'no_rawat' => $row->no_rawat,
+                        'taskid'   => $taskid,
+                        'waktu'    => $waktuFormatted,
+                    ]);
+                }
+
+                $berhasil++;
+
+            } catch (\Exception $ex) {
+                $gagal++;
+                $errors[] = $row->nobooking . ': ' . $ex->getMessage();
+            }
+        }
+
+        return response()->json([
+            'success'  => true,
+            'tanggal'  => $tanggal,
+            'berhasil' => $berhasil,
+            'gagal'    => $gagal,
+            'errors'   => $errors,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('syncTaskId error', ['msg' => $e->getMessage()]);
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
 
 public function antrolPertanggal(Request $request): JsonResponse
 {
     try {
+        set_time_limit(300);
         $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
         $search  = $request->get('search');
         $status  = $request->get('status');
 
-        $query = DB::table('referensi_mobilejkn_bpjs as rmb')
+        // Hit BPJS langsung
+        $service = new \App\Services\BpjsAntreanService();
+        $result  = $service->getAntreanByTanggal($tanggal);
+
+        if (isset($result['error']) || ($result['metadata']['code'] ?? null) != 200) {
+            // Fallback ke DB lokal kalau BPJS tidak bisa diakses
+            return $this->antrolPertanggalFromDb($request);
+        }
+
+        $list = $result['response'] ?? [];
+        if (!is_array($list)) {
+            return $this->antrolPertanggalFromDb($request);
+        }
+
+        // Ambil data enrichment dari lokal (nama, no_sep, taskid, dll)
+        $localData = DB::table('referensi_mobilejkn_bpjs as rmb')
             ->leftJoin('pasien as p', 'rmb.norm', '=', 'p.no_rkm_medis')
             ->leftJoin('poliklinik as pol', 'rmb.kodepoli', '=', 'pol.kd_poli')
             ->leftJoin('dokter as d', 'rmb.kodedokter', '=', 'd.kd_dokter')
             ->leftJoin('bridging_sep as bs', 'bs.no_rawat', '=', 'rmb.no_rawat')
-            ->leftJoin('reg_periksa as rp', 'rmb.no_rawat', '=', 'rp.no_rawat')
-
-            // Subquery taskid yang lebih aman
             ->leftJoin(DB::raw("(
-                SELECT 
-                    rmb2.norm,
-                    rmb2.tanggalperiksa,
-                    MAX(t.taskid) as last_taskid,
-                    MAX(t.waktu) as waktu_task
-                FROM referensi_mobilejkn_bpjs as rmb2
-                LEFT JOIN referensi_mobilejkn_bpjs_taskid t 
-                       ON t.no_rawat = rmb2.no_rawat
-                WHERE DATE(rmb2.tanggalperiksa) = ?
-                GROUP BY rmb2.norm, rmb2.tanggalperiksa
-            ) as tk"), function($join) {
-                $join->on('tk.norm', '=', 'rmb.norm')
-                     ->on('tk.tanggalperiksa', '=', 'rmb.tanggalperiksa');
-            })
-
+                SELECT t.no_rawat,
+                       t.taskid as last_taskid,
+                       t.waktu as waktu_task
+                FROM referensi_mobilejkn_bpjs_taskid t
+                INNER JOIN (
+                    SELECT no_rawat, MAX(waktu) as max_waktu
+                    FROM referensi_mobilejkn_bpjs_taskid
+                    GROUP BY no_rawat
+                ) latest ON t.no_rawat = latest.no_rawat
+                       AND t.waktu = latest.max_waktu
+            ) as tk"), 'tk.no_rawat', '=', 'rmb.no_rawat')
             ->whereDate('rmb.tanggalperiksa', $tanggal)
             ->select(
                 'rmb.nobooking',
-                'p.no_rkm_medis as no_rm',
+                'rmb.no_rawat',
                 'p.nm_pasien as nama',
-                'rmb.nomorkartu',
-                'rmb.nik',
-                'rmb.kodepoli',
+                'p.no_rkm_medis as no_rm',
                 DB::raw("COALESCE(pol.nm_poli, rmb.kodepoli) as nm_poli"),
                 DB::raw("COALESCE(d.nm_dokter, rmb.kodedokter) as nm_dokter"),
-                'rmb.jampraktek',
-                'rmb.tanggalperiksa',
-                'rmb.nomorantrean',
-                'rmb.angkaantrean',
-                'rmb.estimasidilayani',
-                'rmb.jeniskunjungan',
-                'rmb.status as status_antrol',
                 'bs.no_sep',
-                DB::raw("DATE_FORMAT(rmb.validasi, '%Y-%m-%d %H:%i') as waktu_booking"),
                 'tk.last_taskid',
                 DB::raw("DATE_FORMAT(tk.waktu_task, '%H:%i') as waktu_task"),
-                DB::raw("'Mobile JKN' as sumber")
+                DB::raw("DATE_FORMAT(rmb.validasi, '%Y-%m-%d %H:%i') as waktu_booking")
             )
-            ->orderByRaw("CAST(rmb.angkaantrean AS UNSIGNED) ASC")
-            ->addBinding($tanggal, 'select');   // ← Penting!
+            ->get()
+            ->keyBy('nobooking');
 
+        // Gabungkan data BPJS dengan data lokal
+        $data = collect($list)->map(function($item) use ($localData) {
+            $local = $localData[$item['kodebooking']] ?? null;
+
+            $task = $local->last_taskid ?? null;
+            $statusBpjs = $item['status'] ?? '';
+
+            // Kalau BPJS bilang sudah selesai/batal, ikut BPJS
+            // Taskid lokal hanya dipakai kalau status BPJS masih "Belum dilayani"
+            if ($statusBpjs === 'Selesai dilayani') {
+                $statusAlur = match((string)$task) {
+                    '6'  => 'Tunggu Farmasi',
+                    '7'  => 'Selesai',
+                    default => 'Selesai Dilayani',
+                };
+            } elseif ($statusBpjs === 'Batal') {
+                $statusAlur = 'Batal';
+            } else {
+                // Belum dilayani — pakai taskid lokal kalau ada
+                $statusAlur = match((string)$task) {
+                    '3'  => 'Tunggu Pelayanan',
+                    '4'  => 'Sedang Dilayani',
+                    '5'  => 'Selesai Dilayani',
+                    '6'  => 'Tunggu Farmasi',
+                    '7'  => 'Selesai',
+                    '99' => 'Batal',
+                    default => 'Belum',
+                };
+            }
+
+            return [
+                'nobooking'        => $item['kodebooking']    ?? null,
+                'no_rm'            => $local->no_rm           ?? $item['norekammedis'] ?? null,
+                'nama'             => $local->nama            ?? $item['nama'] ?? null,
+                'nomorkartu'       => $item['nokapst']        ?? null,
+                'nik'              => $item['nik']            ?? null,
+                'kodepoli'         => $item['kodepoli']       ?? null,
+                'nm_poli'          => $local->nm_poli         ?? $item['kodepoli'] ?? null,
+                'nm_dokter'        => $local->nm_dokter       ?? $item['kodedokter'] ?? null,
+                'jampraktek'       => $item['jampraktek']     ?? null,
+                'tanggalperiksa'   => $item['tanggal']        ?? null,
+                'nomorantrean'     => $item['noantrean']      ?? null,
+                'angkaantrean'     => $item['angkaantrean']   ?? null,
+                'estimasidilayani' => $item['estimasidilayani'] ?? null,
+                'jeniskunjungan'   => $item['jeniskunjungan'] ?? null,
+                'status_antrol'    => $item['status']         ?? null,
+                'no_sep'           => $local->no_sep          ?? null,
+                'waktu_booking'    => $local->waktu_booking   ?? $item['createdtime'] ?? null,
+                'last_taskid'      => $task,
+                'waktu_task'       => $local->waktu_task      ?? null,
+                'sumber'           => $item['sumberdata']     ?? 'Mobile JKN',
+                'status_alur'      => $statusAlur,
+            ];
+        });
+
+        // Filter search
         if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('p.nm_pasien', 'like', "%{$search}%")
-                  ->orWhere('rmb.norm', 'like', "%{$search}%")
-                  ->orWhere('rmb.nobooking', 'like', "%{$search}%")
-                  ->orWhere('bs.no_sep', 'like', "%{$search}%");
+            $data = $data->filter(function($row) use ($search) {
+                $s = strtolower($search);
+                return str_contains(strtolower($row['nama'] ?? ''), $s)
+                    || str_contains(strtolower($row['no_rm'] ?? ''), $s)
+                    || str_contains(strtolower($row['nobooking'] ?? ''), $s)
+                    || str_contains(strtolower($row['no_sep'] ?? ''), $s);
             });
         }
 
+        // Filter status
         if ($status) {
-            $query->where('rmb.status', $status);
+            $data = $data->filter(fn($row) => ($row['status_antrol'] ?? '') === $status);
         }
 
-        $data = $query->get();
-
-        // Mapping status alur
-        $data = $data->map(function($row) {
-            $task = $row->last_taskid;
-
-            $statusAlur = match((string)$task) {
-                '3'  => 'Tunggu Pelayanan',
-                '4'  => 'Sedang Dilayani',
-                '5'  => 'Selesai Dilayani',
-                '6'  => 'Tunggu Farmasi',
-                '7'  => 'Selesai',
-                '99' => 'Batal',
-                null => in_array($row->status_antrol, ['Batal','Gagal']) 
-                        ? $row->status_antrol 
-                        : ($row->status_antrol === 'Checkin' ? 'Checkin' : 'Belum'),
-                default => 'Belum'
-            };
-
-            return [
-                ... (array)$row,
-                'status_alur' => $statusAlur,
-            ];
-        });
+        $data = $data->values();
 
         return response()->json([
             'success' => true,
             'total'   => $data->count(),
-            'data'    => $data
+            'data'    => $data,
         ]);
 
     } catch (\Exception $e) {
@@ -651,5 +761,27 @@ public function antrolPertanggal(Request $request): JsonResponse
         }
     }
 
+public function getTaskId(Request $request, string $nobooking): JsonResponse
+{
+    try {
+        $service = new \App\Services\BpjsAntreanService();
+        $result  = $service->getListTask($nobooking);
 
+        if (isset($result['error'])) {
+            return response()->json(['success' => false, 'message' => $result['error']], 500);
+        }
+
+        $list = $result['response']['list'] ?? [];
+
+        return response()->json([
+            'success'     => true,
+            'nobooking'   => $nobooking,
+            'data'        => $list,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('getTaskId error', ['msg' => $e->getMessage()]);
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
 }
