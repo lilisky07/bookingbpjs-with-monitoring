@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AntreanListController;
 use App\Http\Controllers\Api\PublicAntreanController;
 use App\Http\Controllers\Api\MonitoringController;
+use App\Http\Controllers\Api\AdminWablasController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,7 +21,7 @@ use App\Http\Controllers\Api\MonitoringController;
 
 
 
-
+// ─── ANTREAN PUBLIK (TANPA AUTENTIKASI) ─────────────────────────────
     Route::get('/antrean/public-list', [PublicAntreanController::class, 'list']);
     Route::post('/antrean/ambil', [PublicAntreanController::class, 'ambilAntrean']);
     Route::get('/antrean/cek', [PublicAntreanController::class, 'cekAntrean']);
@@ -48,6 +49,18 @@ use App\Http\Controllers\Api\MonitoringController;
     return response()->json($result);
 });
     });
+
+    // ─── ADMIN WABLAS ───────────────────────────────────────────────
+    Route::prefix('wablas')->group(function () {
+    Route::get  ('/config',        [AdminWablasController::class, 'getConfig']);
+    Route::post ('/config',        [AdminWablasController::class, 'saveConfig']);
+    Route::post ('/ping',          [AdminWablasController::class, 'ping']);
+    Route::post ('/test-send',     [AdminWablasController::class, 'testSend']);
+    Route::get  ('/sessions',      [AdminWablasController::class, 'sessions']);
+    Route::delete('/sessions/{id}',[AdminWablasController::class, 'deleteSession']);
+    Route::get  ('/stats',         [AdminWablasController::class, 'stats']);
+    Route::post ('/trigger',       [AdminWablasController::class, 'trigger']);
+});
 
 
     Route::post('/login', [AuthController::class, 'login']);
