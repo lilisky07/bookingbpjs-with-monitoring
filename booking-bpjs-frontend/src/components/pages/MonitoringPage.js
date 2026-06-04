@@ -568,19 +568,30 @@ const BorTargetSection = () => {
 };
 
 /* ─── START ANTROL ────────────────────────────────────────────────── */
-const StartAntrolSection = ({ selectedDate }) => {
-  const [data, setData] = useState(null);
+// Props opsional: computedStats + loadingExternal (dipakai overview, dihitung dari data antrol-pertanggal)
+// Kalau tidak di-pass, fetch sendiri dari /start-antrol (standalone)
+const StartAntrolSection = ({ selectedDate, computedStats, loadingExternal }) => {
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
+  const useExternal = computedStats !== undefined;
 
   useEffect(() => {
+    if (useExternal) return;
     setLoading(true);
     axios.get('/api/monitoring/start-antrol', { params: { tanggal: selectedDate } })
       .then(r => { if (r.data.success) setData(r.data.data); })
       .catch(() => {}).finally(() => setLoading(false));
-  }, [selectedDate]);
+  }, [selectedDate, useExternal]);
 
-  const v   = (key) => loading ? '…' : fmt(data?.[key]);
-  const pct = (a, b) => (!loading && data?.[b] > 0) ? ` (${Math.round(data[a] / data[b] * 100)}%)` : '';
+  const isLoading = useExternal ? loadingExternal : loading;
+  const src       = useExternal ? computedStats : data;
+
+  const v   = (key) => isLoading ? '…' : fmt(src?.[key]);
+  const pct = (a, b) => (!isLoading && src?.[b] > 0) ? ` (${Math.round(src[a] / src[b] * 100)}%)` : '';
+  const taskVal = (tid) => {
+    const keyMap = { '3':'tunggu_pelayanan','4':'dilayani','5':'selesai_dilayani','6':'tunggu_farmasi','7':'selesai','99':'batal_taskid' };
+    return isLoading ? '…' : fmt(src?.[keyMap[tid]]);
+  };
 
   return (
     <div>
@@ -612,13 +623,11 @@ const StartAntrolSection = ({ selectedDate }) => {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {['3','4','5','6','7','99'].map((tid, idx, arr) => {
             const t = TASK_LABELS[tid];
-            const keyMap = { '3':'tunggu_pelayanan','4':'dilayani','5':'selesai_dilayani','6':'tunggu_farmasi','7':'selesai','99':'batal_taskid' };
-            const val = loading ? '…' : fmt(data?.[keyMap[tid]]);
             return (
               <React.Fragment key={tid}>
                 <div className="mini-stat-card" style={{ background: t.bg, borderRadius: 12, padding: '8px 12px', textAlign: 'center', minWidth: 80 }}>
                   <div style={{ fontSize: 16, marginBottom: 2 }}>{t.icon}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: t.color, letterSpacing: '-0.5px' }}>{val}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: t.color, letterSpacing: '-0.5px' }}>{taskVal(tid)}</div>
                   <div style={{ fontSize: 9.5, color: t.color, fontWeight: 600, marginTop: 2, opacity: 0.8 }}>{t.label}</div>
                 </div>
                 {idx < arr.length - 2 && <div style={{ color: '#C7C7CC', fontSize: 14, transition: 'color 0.2s ease' }}>›</div>}
@@ -889,9 +898,12 @@ const STATUS_ANTROL = {
 };
 
 /* ─── ANTROL TAB ──────────────────────────────────────────────────── */
-const AntrolTab = ({ selectedDate }) => {
-  const [data, setData]                 = useState([]);
-  const [loading, setLoading]           = useState(true);
+const AntrolTab = ({ selectedDate, externalData, externalLoading }) => {
+  const [internalData, setInternalData]   = useState([]);
+  const [internalLoading, setInternalLoading] = useState(true);
+  const useExternal = externalData !== undefined;
+  const data    = useExternal ? externalData    : internalData;
+  const loading = useExternal ? externalLoading : internalLoading;
   const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage]                 = useState(1);
@@ -915,13 +927,14 @@ const AntrolTab = ({ selectedDate }) => {
   };
 
   useEffect(() => {
-    setLoading(true); setPage(1);
+    if (useExternal) { setPage(1); return; }
+    setInternalLoading(true); setPage(1);
     axios.get('/api/monitoring/antrol-pertanggal', {
       params: { tanggal: selectedDate, search, status: filterStatus }
     })
-      .then(r => { if (r.data.success) setData(r.data.data); else setData([]); })
-      .catch(() => setData([])).finally(() => setLoading(false));
-  }, [selectedDate, search, filterStatus]);
+      .then(r => { if (r.data.success) setInternalData(r.data.data); else setInternalData([]); })
+      .catch(() => setInternalData([])).finally(() => setInternalLoading(false));
+  }, [selectedDate, search, filterStatus, useExternal]);
 
   const filtered   = data.slice((page-1)*perPage, page*perPage);
   const totalPages = Math.ceil(data.length / perPage);
@@ -987,8 +1000,8 @@ const AntrolTab = ({ selectedDate }) => {
           placeholder="Cari nama / no RM / no booking / NIK…" style={{ width: 280 }} />
         <select className="apple-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">Semua Status</option>
-          <option value="Belum">Belum</option>
-          <option value="Checkin">Checkin</option>
+          <option value="Belum">Belum Dilayani</option>
+          <option value="Checkin">Selesai Dilayani</option>
           <option value="Batal">Batal</option>
           <option value="Gagal">Gagal</option>
         </select>
@@ -1104,6 +1117,81 @@ const AntrolTab = ({ selectedDate }) => {
   );
 };
 
+/* ─── OVERVIEW ANTROL SECTION ────────────────────────────────────── */
+// Fetch sekali dari antrol-pertanggal, hitung stats, pass ke StartAntrolSection + AntrolTab
+const OverviewAntrolSection = ({ selectedDate }) => {
+  const [data, setData]       = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    axios.get('/api/monitoring/antrol-pertanggal', { params: { tanggal: selectedDate } })
+      .then(r => { if (r.data.success) setData(r.data.data); else setData([]); })
+      .catch(() => setData([])).finally(() => setLoading(false));
+  }, [selectedDate]);
+
+  const isBatal   = (r) => r.status_antrol === 'Batal' || String(r.last_taskid) === '99';
+  const isSelesai = (r) => r.status_antrol === 'Selesai dilayani' || ['5','7'].includes(String(r.last_taskid));
+  const isBelum   = (r) => !isSelesai(r) && !isBatal(r);
+  const hasSep    = (r) => r.no_sep && r.no_sep !== '—' && r.no_sep !== null;
+  const isMjkn    = (r) => r.sumber === 'Mobile JKN' || r.sumber === 'MJKN';
+  const isLoket   = (r) => !isMjkn(r);
+
+  const totalSelesai   = data.filter(isSelesai).length;
+  const totalBelum     = data.filter(isBelum).length;
+  const totalBatal     = data.filter(isBatal).length;
+  const mjknTotal      = data.filter(isMjkn).length;
+  const mjknSelesai    = data.filter(r => isMjkn(r) && isSelesai(r)).length;
+  const mjknBelum      = data.filter(r => isMjkn(r) && isBelum(r)).length;
+  const loketTotal     = data.filter(isLoket).length;
+  const loketSelesai   = data.filter(r => isLoket(r) && isSelesai(r)).length;
+  const loketBelum     = data.filter(r => isLoket(r) && isBelum(r)).length;
+  const sepTerbit      = data.filter(hasSep).length;
+
+  // Hitung task ID counts untuk alur pelayanan
+  const taskCount = (tid) => data.filter(r => String(r.last_taskid) === String(tid)).length;
+
+  const computedStats = {
+    total_belum:       totalBelum,
+    total_selesai:     totalSelesai,
+    total_batal:       totalBatal,
+    sep_terbit:        sepTerbit,
+    mjkn_total:        mjknTotal,
+    mjkn_selesai:      mjknSelesai,
+    mjkn_belum:        mjknBelum,
+    jkn_total:         loketTotal,
+    jkn_selesai:       loketSelesai,
+    jkn_belum:         loketBelum,
+    non_jkn_total:     loketTotal,
+    non_jkn_selesai:   loketSelesai,
+    non_jkn_belum:     loketBelum,
+    record:            data.length,
+    // SEP rawat jalan/inap — field ini dari data row kalau ada, kalau tidak pakai sepTerbit
+    sep_ralan:         data.filter(r => hasSep(r) && (r.jenis_kunjungan === 'Rawat Jalan' || !r.jenis_kunjungan)).length || sepTerbit,
+    sep_ranap:         data.filter(r => hasSep(r) && r.jenis_kunjungan === 'Rawat Inap').length,
+    // Alur task ID
+    tunggu_pelayanan:  taskCount('3'),
+    dilayani:          taskCount('4'),
+    selesai_dilayani:  taskCount('5'),
+    tunggu_farmasi:    taskCount('6'),
+    selesai:           taskCount('7'),
+    batal_taskid:      taskCount('99'),
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div className="apple-card" style={{ padding: '24px 28px', animation: 'scaleIn 0.26s cubic-bezier(0.34,1.56,0.64,1)' }}>
+        <StartAntrolSection
+          selectedDate={selectedDate}
+          computedStats={computedStats}
+          loadingExternal={loading}
+        />
+      </div>
+      <AntrolTab selectedDate={selectedDate} externalData={data} externalLoading={loading} />
+    </div>
+  );
+};
+
 /* ─── TABS CONFIG ─────────────────────────────────────────────────── */
 const TABS = [
   { id: 'overview',      label: 'Overview',           icon: '⊞' },
@@ -1186,18 +1274,16 @@ function MonitoringPage() {
         <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '24px' }}>
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {wrap(<StartAntrolSection selectedDate={selectedDate} />)}
               {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
-              {wrap(<DetailAntrolSection selectedDate={selectedDate} />)}
+              <OverviewAntrolSection selectedDate={selectedDate} />
             </div>
           )}
           {activeTab === 'tt' && wrap(<TempurTidurSection />)}
           {activeTab === 'antrol_detail' && <AntrolTab selectedDate={selectedDate} />}
           {activeTab === 'sep' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {wrap(<StartAntrolSection selectedDate={selectedDate} />)}
               {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
-              {wrap(<DetailAntrolSection selectedDate={selectedDate} />)}
+              <AntrolTab selectedDate={selectedDate} />
             </div>
           )}
           {activeTab === 'surat_kontrol' && wrap(<SuratKontrolSection selectedDate={selectedDate} />)}

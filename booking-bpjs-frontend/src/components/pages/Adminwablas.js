@@ -621,12 +621,12 @@ export default function AdminWablas() {
                 desc: 'Kirim reminder H-3 dan H-1 ke semua pasien yang jadwal kontrolnya sesuai target tanggal hari ini.',
                 color: '#007AFF', warn: false,
               },
-              {
-                cmd: 'reminder:kontrol',
-                icon: '📋', title: 'Reminder Kontrol',
-                desc: 'Kirim reminder surat kontrol BPJS ke pasien yang belum mendapat pengingat.',
-                color: '#34C759', warn: false,
-              },
+            //   {
+            //     cmd: 'reminder:kontrol',
+            //     icon: '📋', title: 'Reminder Kontrol',
+            //     desc: 'Kirim reminder surat kontrol BPJS ke pasien yang belum mendapat pengingat.',
+            //     color: '#34C759', warn: false,
+            //   },
               {
                 cmd: 'reminder:surkon',
                 icon: '📄', title: 'Reminder Surat Kontrol',

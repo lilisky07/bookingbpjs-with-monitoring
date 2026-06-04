@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\DB;
 
 class AdminWablasController extends Controller
 {
-    // ─── Ambil konfigurasi dari .env / config ─────────────────────────
     public function getConfig()
     {
         return response()->json([
@@ -27,7 +26,6 @@ class AdminWablasController extends Controller
         ]);
     }
 
-    // ─── Simpan konfigurasi → tulis ke .env ──────────────────────────
     public function saveConfig(Request $request)
     {
         $data = $request->validate([
@@ -42,23 +40,21 @@ class AdminWablasController extends Controller
         ]);
 
         $this->updateEnv([
-            'WABLAS_URL'          => $data['wablas_url'],
-            'WABLAS_TOKEN'        => $data['wablas_token'],
-            'WABLAS_SECRET'       => $data['wablas_secret'],
-            'WABLAS_NO_GCARE'     => $data['no_gcare'],
+            'WABLAS_URL'            => $data['wablas_url'],
+            'WABLAS_TOKEN'          => $data['wablas_token'],
+            'WABLAS_SECRET'         => $data['wablas_secret'],
+            'WABLAS_NO_GCARE'       => $data['no_gcare'],
             'WABLAS_NO_PENDAFTARAN' => $data['no_pendaftaran'],
-            'WABLAS_JADWAL_IMG'   => $data['jadwal_img_url'] ?? '',
+            'WABLAS_JADWAL_IMG'     => $data['jadwal_img_url'] ?? '',
             'WABLAS_REMINDER_AKTIF' => $data['reminder_aktif'] ? 'true' : 'false',
-            'WABLAS_NPS_AKTIF'    => $data['nps_aktif'] ? 'true' : 'false',
+            'WABLAS_NPS_AKTIF'      => $data['nps_aktif'] ? 'true' : 'false',
         ]);
 
-        // Clear config cache agar perubahan langsung terpakai
         Artisan::call('config:clear');
 
         return response()->json(['message' => 'Konfigurasi berhasil disimpan']);
     }
 
-    // ─── Ping ke Wablas API ───────────────────────────────────────────
     public function ping()
     {
         $url    = config('wablas.url', 'https://jogja.wablas.com');
@@ -81,7 +77,6 @@ class AdminWablasController extends Controller
         }
     }
 
-    // ─── Kirim pesan test ─────────────────────────────────────────────
     public function testSend(Request $request)
     {
         $request->validate([
@@ -106,15 +101,12 @@ class AdminWablasController extends Controller
                 return response()->json(['message' => 'Pesan berhasil dikirim']);
             }
 
-            return response()->json([
-                'message' => 'Gagal kirim: ' . $res->body()
-            ], 422);
+            return response()->json(['message' => 'Gagal kirim: ' . $res->body()], 422);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 
-    // ─── List active sessions ─────────────────────────────────────────
     public function sessions()
     {
         $data = WaConversationState::query()
@@ -127,7 +119,6 @@ class AdminWablasController extends Controller
         return response()->json(['data' => $data]);
     }
 
-    // ─── Hapus session ────────────────────────────────────────────────
     public function deleteSession($id)
     {
         $s = WaConversationState::findOrFail($id);
@@ -135,28 +126,29 @@ class AdminWablasController extends Controller
         return response()->json(['message' => 'Session dihapus']);
     }
 
-    // ─── Stats ringkasan ──────────────────────────────────────────────
     public function stats()
     {
         $activeSessions = WaConversationState::count();
+        $npsToday       = NpsUlasan::whereDate('created_at', today())->count();
 
-        // Hitung NPS terkirim hari ini
-        $npsToday = NpsUlasan::whereDate('created_at', today())->count();
+        // Hitung reminder terkirim hari ini dari wa_surkon_sent
+        $reminderToday = DB::table('wa_surkon_sent')
+            ->whereDate('created_at', today())
+            ->count();
 
         return response()->json([
-            'active_sessions'  => $activeSessions,
-            'reminder_h3_today'=> 0,   // TODO: simpan log kirim per hari jika dibutuhkan
-            'reminder_h1_today'=> 0,
-            'nps_today'        => $npsToday,
+            'active_sessions'   => $activeSessions,
+            'reminder_h3_today' => $reminderToday,
+            'reminder_h1_today' => 0,
+            'nps_today'         => $npsToday,
         ]);
     }
 
-    // ─── Trigger artisan command ──────────────────────────────────────
+    // ─── Trigger artisan command — synchronous, return output ─────────
     public function trigger(Request $request)
     {
         $allowed = [
             'reminder:harian',
-            'reminder:kontrol',
             'reminder:surkon',
             'nps:kirim',
         ];
@@ -168,32 +160,32 @@ class AdminWablasController extends Controller
         }
 
         try {
-            // Jalankan di background agar request tidak timeout
-            $artisan = base_path('artisan');
-            $logFile = storage_path('logs/trigger-' . str_replace(':', '-', $cmd) . '.log');
+            Artisan::call($cmd);
+            $output = Artisan::output();
 
-            if (PHP_OS_FAMILY === 'Windows') {
-                pclose(popen("start /B php \"{$artisan}\" {$cmd} >> \"{$logFile}\" 2>&1", 'r'));
-            } else {
-                exec("php {$artisan} {$cmd} >> {$logFile} 2>&1 &");
-            }
+            // Simpan log ke file juga
+            $logFile = storage_path('logs/trigger-' . str_replace(':', '-', $cmd) . '.log');
+            file_put_contents(
+                $logFile,
+                '[' . now() . '] ' . $cmd . PHP_EOL . $output . PHP_EOL,
+                FILE_APPEND
+            );
 
             return response()->json([
-                'message' => "Command '{$cmd}' dijalankan di background. Cek log di storage/logs."
+                'message' => "Command '{$cmd}' selesai dijalankan.",
+                'output'  => $output,
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal: ' . $e->getMessage()], 500);
         }
     }
 
-    // ─── Helper: update .env ──────────────────────────────────────────
     private function updateEnv(array $data): void
     {
         $envPath = base_path('.env');
         $env     = file_get_contents($envPath);
 
         foreach ($data as $key => $value) {
-            // Nilai yang mengandung spasi perlu dikutip
             $val = strpos($value, ' ') !== false ? "\"{$value}\"" : $value;
 
             if (preg_match("/^{$key}=.*/m", $env)) {

@@ -678,8 +678,19 @@ public function antrolPertanggal(Request $request): JsonResponse
         }
 
         // Filter status
+        // status_antrol dari BPJS: 'Belum dilayani', 'Selesai dilayani', 'Batal'
+        // Dropdown frontend kirim: 'Belum', 'Checkin', 'Batal', 'Gagal'
         if ($status) {
-            $data = $data->filter(fn($row) => ($row['status_antrol'] ?? '') === $status);
+            $data = $data->filter(function($row) use ($status) {
+                $s = $row['status_antrol'] ?? '';
+                return match($status) {
+                    'Belum'   => $s === 'Belum dilayani' || $s === 'Belum',
+                    'Checkin' => $s === 'Selesai dilayani' || $s === 'Checkin',
+                    'Batal'   => $s === 'Batal',
+                    'Gagal'   => $s === 'Gagal',
+                    default   => $s === $status,
+                };
+            });
         }
 
         $data = $data->values();
