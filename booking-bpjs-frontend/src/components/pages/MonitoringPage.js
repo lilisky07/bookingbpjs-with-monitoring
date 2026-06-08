@@ -921,9 +921,27 @@ const AntrolTab = ({ selectedDate, externalData, externalLoading }) => {
     setModalData([]);
     setModalBooking(row.nobooking);
     setModalNama(row.nama);
-    axios.get(`/api/monitoring/taskid/${row.nobooking}`)
-      .then(r => { if (r.data.success) setModalData(r.data.data); })
-      .catch(() => {}).finally(() => setModalLoading(false));
+
+    const fetchTaskId = (attempt = 1) => {
+      fetch(`/api/monitoring/taskid/${row.nobooking}`, { cache: 'no-store' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            setModalData(data.data);
+            setModalLoading(false);
+          } else if (attempt < 4) {
+            // retry sampai 3x dengan jeda 800ms kalau data masih kosong
+            setTimeout(() => fetchTaskId(attempt + 1), 800);
+          } else {
+            setModalLoading(false);
+          }
+        })
+        .catch(() => {
+          if (attempt < 4) setTimeout(() => fetchTaskId(attempt + 1), 800);
+          else setModalLoading(false);
+        });
+    };
+    fetchTaskId();
   };
 
   useEffect(() => {
@@ -977,16 +995,29 @@ const AntrolTab = ({ selectedDate, externalData, externalLoading }) => {
                 ? <p style={{ textAlign: 'center', color: '#8E8E93', padding: 30, fontSize: 13 }}>Tidak ada data task dari BPJS</p>
                 : modalData.map((t, i) => {
                   const tl = TASK_LABELS[String(t.taskid)] || { label: t.taskname, color: '#6E6E73', bg: 'rgba(0,0,0,0.05)', icon: '📌' };
+                  const labelStyle = { width: 110, minWidth: 110, color: '#6E6E73', fontWeight: 500, fontSize: 12.5, paddingRight: 4, verticalAlign: 'top' };
+                  const sepStyle   = { width: 12, color: '#C7C7CC', fontSize: 12.5, verticalAlign: 'top' };
+                  const valStyle   = { fontWeight: 600, fontFamily: 'ui-monospace, monospace', fontSize: 12.5, color: '#1D1D1F', verticalAlign: 'top', wordBreak: 'break-all' };
+                  const rows = [
+                    { label: 'Waktu RS',     val: t.wakturs || '—',                                         style: {} },
+                    { label: 'Waktu',        val: t.waktu   || '—',                                         style: {} },
+                    { label: 'Task Name',    val: `${tl.icon} ${t.taskname || '—'}`,                        style: { fontFamily: 'inherit', color: tl.color } },
+                    { label: 'Task ID',      val: String(t.taskid ?? '—'),                                  style: {} },
+                    { label: 'Kode Booking', val: t.kodebooking || modalBooking || '—',                     style: {} },
+                  ];
                   return (
                     <div key={i} style={{ background: tl.bg, borderRadius: 12, padding: '14px 16px', marginBottom: 10, border: `0.5px solid ${tl.color}22`, animation: `rowIn 0.22s cubic-bezier(0.34,1.56,0.64,1) ${i*0.05}s both` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span style={{ fontWeight: 700, color: tl.color, fontSize: 13.5 }}>{tl.icon} {t.taskname}</span>
-                        <span className="pill" style={{ background: tl.color, color: '#fff', fontSize: 11 }}>Task {t.taskid}</span>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#6E6E73', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <div>Waktu RS &nbsp;&nbsp;: <strong style={{ color: '#1D1D1F' }}>{t.wakturs}</strong></div>
-                        <div>Waktu BPJS: <strong style={{ color: '#1D1D1F' }}>{t.waktu}</strong></div>
-                      </div>
+                      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                        <tbody>
+                          {rows.map((r, ri) => (
+                            <tr key={ri}>
+                              <td style={labelStyle}>{r.label}</td>
+                              <td style={sepStyle}>:</td>
+                              <td style={{ ...valStyle, ...r.style }}>{r.val}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   );
                 })}

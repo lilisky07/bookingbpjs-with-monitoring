@@ -782,12 +782,36 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
             return response()->json(['success' => false, 'message' => $result['error']], 500);
         }
 
-        $list = $result['response']['list'] ?? [];
+        // ── DEBUG: lihat struktur response asli BPJS ─────────────────
+        $responseRaw = $result['response'] ?? null;
+        Log::info('getTaskId RAW response', [
+            'nobooking'     => $nobooking,
+            'response_type' => gettype($responseRaw),
+            'response_keys' => is_array($responseRaw) ? array_keys($responseRaw) : 'bukan array',
+            'response_dump' => $responseRaw,
+        ]);
+
+        // Coba berbagai kemungkinan key dari BPJS
+        $list = $responseRaw['list']      // kemungkinan 1
+             ?? $responseRaw['listtask']  // kemungkinan 2
+             ?? $responseRaw['data']      // kemungkinan 3
+             ?? (is_array($responseRaw) && isset($responseRaw[0]) ? $responseRaw : []);
+
+        $kodebooking = $responseRaw['kodebooking'] ?? $nobooking;
+
+        // Inject kodebooking ke setiap item supaya frontend bisa tampilkan per task
+        $list = array_map(function ($item) use ($kodebooking) {
+            $item['kodebooking'] = $kodebooking;
+            return $item;
+        }, $list);
 
         return response()->json([
             'success'     => true,
             'nobooking'   => $nobooking,
             'data'        => $list,
+            // ── DEBUG (hapus setelah confirmed) ──
+            '_debug_keys' => is_array($responseRaw) ? array_keys($responseRaw) : 'bukan array',
+            '_debug_raw'  => $responseRaw,
         ]);
 
     } catch (\Exception $e) {
