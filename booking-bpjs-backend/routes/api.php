@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AntreanListController;
 use App\Http\Controllers\Api\PublicAntreanController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\AdminwablasController;
+use App\Http\Controllers\Api\NpsLaporanController; // namespace sesuai file: App\Http\Controllers
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +51,9 @@ use App\Http\Controllers\Api\AdminwablasController;
 });
     });
 
+    // ─── NPS LAPORAN ────────────────────────────────────────────────
+    Route::get('/nps/laporan', [NpsLaporanController::class, 'index']);
+
     // ─── ADMIN WABLAS ───────────────────────────────────────────────
     Route::prefix('wablas')->group(function () {
     Route::get  ('/config',        [AdminwablasController::class, 'getConfig']);
@@ -81,5 +85,3 @@ Route::get('/test-db', function () {
     return 'Koneksi gagal: ' . $e->getMessage();
   }
 });
-
-

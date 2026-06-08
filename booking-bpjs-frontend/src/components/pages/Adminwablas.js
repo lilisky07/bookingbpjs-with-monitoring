@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 /* ─── GLOBAL STYLES (Apple-style, matching MonitoringPage) ──────── */
@@ -87,6 +87,7 @@ const adminStyle = `
   .badge-red    { background:rgba(255,59,48,0.12);   color:#c0160c; }
   .badge-blue   { background:rgba(0,122,255,0.1);   color:#0058cc; }
   .badge-gray   { background:rgba(120,120,128,0.12); color:#5a5a63; }
+  .badge-purple { background:rgba(175,82,222,0.12); color:#6e1f9c; }
 
   .aw-tab {
     font-size:13px; font-weight:500; padding:7px 16px;
@@ -114,6 +115,9 @@ const adminStyle = `
   }
   .aw-table tr:hover td { background:rgba(0,122,255,0.025); }
   .aw-table tr:last-child td { border-bottom:none; }
+  .aw-table tr.row-det td { background:rgba(255,59,48,0.04); }
+  .aw-table tr.row-pas td { background:rgba(255,149,0,0.04); }
+  .aw-table tr.row-pro td { background:rgba(52,199,89,0.04); }
 
   .status-dot {
     width:7px; height:7px; border-radius:50%; display:inline-block;
@@ -166,6 +170,16 @@ const adminStyle = `
   .toggle-on  { background:#34C759; }
   .toggle-on .toggle-thumb  { left:18px; }
   .toggle-off { background:rgba(120,120,128,0.28); }
+
+  /* NPS Score gauge bar */
+  .nps-gauge-track {
+    height:6px; border-radius:99px;
+    background:rgba(0,0,0,0.07); overflow:hidden;
+  }
+  .nps-gauge-fill {
+    height:100%; border-radius:99px;
+    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
 `;
 
 /* ─── HELPERS ───────────────────────────────────────────────────── */
@@ -214,6 +228,390 @@ function StatCard({ icon, label, value, sub, color = '#007AFF', loading }) {
         : <div style={{ fontSize: 26, fontWeight: 700, color: '#1D1D1F', letterSpacing: '-0.5px' }}>{value}</div>
       }
       {sub && <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.5)', marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ─── NPS MINI DONUT (pure CSS/SVG, no lib needed) ──────────────── */
+function NpsDonut({ promoters = 0, passives = 0, detractors = 0 }) {
+  const total = promoters + passives + detractors || 1;
+  const r = 44, cx = 50, cy = 50, stroke = 10;
+  const circ = 2 * Math.PI * r;
+  const pctPro = promoters / total;
+  const pctPas = passives  / total;
+  const pctDet = detractors / total;
+  const dashPro = circ * pctPro;
+  const dashPas = circ * pctPas;
+  const dashDet = circ * pctDet;
+  const offPro = 0;
+  const offPas = circ - dashPro;
+  const offDet = circ - dashPro - dashPas;
+  return (
+    <svg viewBox="0 0 100 100" width="100" height="100" style={{ transform:'rotate(-90deg)' }}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth={stroke} />
+      {detractors > 0 && (
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#FF3B30"
+          strokeWidth={stroke} strokeDasharray={`${dashDet} ${circ}`}
+          strokeDashoffset={-offDet} strokeLinecap="round" />
+      )}
+      {passives > 0 && (
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#FF9500"
+          strokeWidth={stroke} strokeDasharray={`${dashPas} ${circ}`}
+          strokeDashoffset={-offPas} strokeLinecap="round" />
+      )}
+      {promoters > 0 && (
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#34C759"
+          strokeWidth={stroke} strokeDasharray={`${dashPro} ${circ}`}
+          strokeDashoffset={-offPro} strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
+/* ─── TAB NPS LAPORAN ────────────────────────────────────────────── */
+function NpsLaporan({ toast }) {
+  const [dari,    setDari]    = useState('');
+  const [sampai,  setSampai]  = useState('');
+  const [loading, setLoading] = useState(false);
+  const [data,    setData]    = useState(null);
+
+  // Default range: 30 hari terakhir
+  useEffect(() => {
+    const now  = new Date();
+    const ago  = new Date(); ago.setDate(ago.getDate() - 30);
+    setSampai(now.toISOString().split('T')[0]);
+    setDari(ago.toISOString().split('T')[0]);
+  }, []);
+
+  const fetchLaporan = useCallback(async () => {
+    if (!dari || !sampai) { toast('Pilih rentang tanggal terlebih dahulu', 'error'); return; }
+    setLoading(true);
+    setData(null);
+    try {
+      const r = await axios.get('/api/nps/laporan', { params: { dari, sampai } });
+      setData(r.data);
+    } catch (e) {
+      toast(e.response?.data?.message ?? 'Gagal mengambil data NPS', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [dari, sampai, toast]);
+
+  /* ── Export PDF (pakai print CSS) ── */
+  const handleExportPDF = () => {
+    if (!data) { toast('Ambil data dahulu', 'error'); return; }
+    const k = data.konklusi;
+    const p = data.periode;
+    const rows = (data.data || []).map(d => `
+      <tr style="background:${d.segmen==='detractor'?'#fff0ef':d.segmen==='passive'?'#fff8ed':'#f0faf2'}">
+        <td>${d.nm_pasien||'-'}</td>
+        <td>${d.nm_poli||'-'}</td>
+        <td>${d.jenis_rawat||'-'}</td>
+        <td style="text-align:center;font-weight:600">${d.skor??'-'}</td>
+        <td style="text-align:center">${d.segmen==='promoter'?'🟢 Promoter':d.segmen==='passive'?'🟡 Passive':'🔴 Detractor'}</td>
+        <td style="font-size:11px">${(d.komentar||'-').substring(0,80)}</td>
+        <td style="text-align:center">${d.sudah_direspons_cs?'✅ Ya':'❌ Belum'}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Laporan NPS ${p.dari} s/d ${p.sampai}</title>
+    <style>
+      body{font-family:-apple-system,sans-serif;padding:28px;color:#1D1D1F;font-size:13px}
+      h1{font-size:20px;font-weight:700;margin-bottom:4px}
+      .sub{color:#666;font-size:12px;margin-bottom:20px}
+      .summary{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+      .s-box{border:1px solid #e5e5e5;border-radius:10px;padding:12px 16px;min-width:110px}
+      .s-lbl{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+      .s-val{font-size:20px;font-weight:700}
+      table{width:100%;border-collapse:collapse}
+      th{background:#f5f5f7;font-size:10px;text-transform:uppercase;letter-spacing:.4px;
+         color:#666;padding:8px 10px;text-align:left;border-bottom:1px solid #e5e5e5}
+      td{padding:8px 10px;border-bottom:0.5px solid #f0f0f0;font-size:12px}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <h1>📊 Laporan NPS — RSU GMC</h1>
+    <div class="sub">Periode ${p.dari} s/d ${p.sampai} &nbsp;·&nbsp; Dicetak ${new Date().toLocaleString('id-ID')}</div>
+    <div class="summary">
+      <div class="s-box"><div class="s-lbl">NPS Score</div><div class="s-val" style="color:${(k.nps_score??0)>=50?'#34C759':(k.nps_score??0)>=0?'#FF9500':'#FF3B30'}">${k.nps_score??'-'}</div></div>
+      <div class="s-box"><div class="s-lbl">Rata-rata</div><div class="s-val">${k.rata_rata_skor??'-'}</div></div>
+      <div class="s-box"><div class="s-lbl">Total respons</div><div class="s-val">${k.total_respons}</div></div>
+      <div class="s-box"><div class="s-lbl">Response rate</div><div class="s-val">${k.response_rate}</div></div>
+      <div class="s-box"><div class="s-lbl">🟢 Promoter</div><div class="s-val" style="color:#34C759">${k.promoters}</div></div>
+      <div class="s-box"><div class="s-lbl">🟡 Passive</div><div class="s-val" style="color:#FF9500">${k.passives}</div></div>
+      <div class="s-box"><div class="s-lbl">🔴 Detractor</div><div class="s-val" style="color:#FF3B30">${k.detractors}</div></div>
+    </div>
+    <table><thead><tr>
+      <th>Nama Pasien</th><th>Unit</th><th>Jenis Rawat</th>
+      <th>Skor</th><th>Segmen</th><th>Komentar</th><th>Direspons CS?</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <script>window.onload=()=>{window.print()}<\/script></body></html>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+  };
+
+  /* ── Export CSV (untuk Google Sheets) ── */
+  const handleExportCSV = () => {
+    if (!data) { toast('Ambil data dahulu', 'error'); return; }
+    const k = data.konklusi;
+    const p = data.periode;
+    const lines = [
+      ['LAPORAN NPS RSU GMC'],
+      [`Periode,${p.dari} s/d ${p.sampai}`],
+      [`Dicetak,${new Date().toLocaleString('id-ID')}`],
+      [],
+      ['RINGKASAN'],
+      ['NPS Score', k.nps_score ?? '-'],
+      ['Rata-rata skor', k.rata_rata_skor ?? '-'],
+      ['Total kirim', k.total_kirim],
+      ['Total respons', k.total_respons],
+      ['Response rate', k.response_rate],
+      ['Promoters', k.promoters],
+      ['Passives', k.passives],
+      ['Detractors', k.detractors],
+      [],
+      ['DETAIL PASIEN'],
+      ['Nama Pasien','Unit Pelayanan','Jenis Rawat','Skor','Segmen','Komentar','Waktu Skor','Direspons CS?'],
+      ...(data.data || []).map(d => [
+        d.nm_pasien||'', d.nm_poli||'', d.jenis_rawat||'',
+        d.skor??'', d.segmen||'', d.komentar||'',
+        d.skor_at||'', d.sudah_direspons_cs?'Ya':'Belum',
+      ]),
+    ];
+    const csv = lines.map(r =>
+      Array.isArray(r) ? r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',') : r
+    ).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `laporan-nps-${p.dari}-${p.sampai}.csv`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('File CSV berhasil diunduh — buka di Google Sheets via File > Import');
+  };
+
+  const k = data?.konklusi;
+  const npsScore = k ? (k.nps_score ?? null) : null;
+  const npsColor = npsScore === null ? '#8E8E93' : npsScore >= 50 ? '#34C759' : npsScore >= 0 ? '#FF9500' : '#FF3B30';
+  const gaugeWidth = npsScore === null ? 0 : Math.max(0, Math.min(100, (npsScore + 100) / 2));
+
+  return (
+    <div className="section-enter" style={{ display:'grid', gap:16 }}>
+
+      {/* ── Filter tanggal ── */}
+      <div className="aw-card" style={{ padding:20 }}>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:12, flexWrap:'wrap' }}>
+          <div style={{ flex:1, minWidth:140 }}>
+            <label className="aw-label">Dari tanggal</label>
+            <input type="date" className="aw-input" value={dari} onChange={e => setDari(e.target.value)} />
+          </div>
+          <div style={{ flex:1, minWidth:140 }}>
+            <label className="aw-label">Sampai tanggal</label>
+            <input type="date" className="aw-input" value={sampai} onChange={e => setSampai(e.target.value)} />
+          </div>
+          <button
+            className="aw-btn aw-btn-primary"
+            onClick={fetchLaporan}
+            disabled={loading}
+            style={{ flexShrink:0, height:38 }}
+          >
+            {loading
+              ? <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                  <span style={{ width:12, height:12, border:'2px solid rgba(255,255,255,0.4)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.7s linear infinite', display:'inline-block' }} />
+                  Memuat…
+                </span>
+              : '🔍 Tampilkan'
+            }
+          </button>
+          {data && (
+            <>
+              <button className="aw-btn aw-btn-ghost aw-btn-sm" onClick={handleExportPDF} style={{ flexShrink:0, height:38 }}>
+                📄 Export PDF
+              </button>
+              <button className="aw-btn aw-btn-ghost aw-btn-sm" onClick={handleExportCSV} style={{ flexShrink:0, height:38 }}>
+                📊 Export CSV
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Loading skeleton ── */}
+      {loading && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} className="aw-card" style={{ padding:20 }}>
+              <div className="skeleton" style={{ height:14, width:'50%', marginBottom:10 }} />
+              <div className="skeleton" style={{ height:28, width:'70%' }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Dashboard NPS ── */}
+      {data && !loading && (
+        <>
+          {/* Baris atas: NPS score besar + ringkasan */}
+          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:16, alignItems:'stretch' }}>
+
+            {/* NPS Score card */}
+            <div className="aw-card" style={{ padding:'22px 28px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minWidth:180 }}>
+              <div style={{ fontSize:11, fontWeight:600, color:'rgba(60,60,67,0.55)', textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:8 }}>
+                NPS Score
+              </div>
+              <div style={{ fontSize:56, fontWeight:700, letterSpacing:'-2px', color: npsColor, lineHeight:1 }}>
+                {npsScore ?? '—'}
+              </div>
+              <div style={{ marginTop:14, width:'100%' }}>
+                <div className="nps-gauge-track">
+                  <div className="nps-gauge-fill" style={{ width: gaugeWidth + '%', background: npsColor }} />
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', marginTop:4, fontSize:10, color:'rgba(60,60,67,0.4)' }}>
+                  <span>-100</span><span>0</span><span>+100</span>
+                </div>
+              </div>
+              <div style={{ marginTop:10, fontSize:11, color:'rgba(60,60,67,0.45)' }}>
+                {npsScore >= 50 ? '🟢 Excellent' : npsScore >= 0 ? '🟡 Good' : '🔴 Needs work'}
+              </div>
+            </div>
+
+            {/* Stats grid */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+              {[
+                { label:'Total kirim',    value: k.total_kirim,    color:'#007AFF', icon:'📤' },
+                { label:'Total respons',  value: k.total_respons,  color:'#34C759', icon:'💬' },
+                { label:'Response rate',  value: k.response_rate,  color:'#FF9500', icon:'📈' },
+                { label:'Promoters 🟢',   value: k.promoters,      color:'#34C759', icon:'' },
+                { label:'Passives 🟡',    value: k.passives,       color:'#FF9500', icon:'' },
+                { label:'Detractors 🔴',  value: k.detractors,     color:'#FF3B30', icon:'' },
+              ].map((s, i) => (
+                <div key={i} className="aw-card" style={{ padding:'14px 16px' }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:'rgba(60,60,67,0.55)', textTransform:'uppercase', letterSpacing:'0.3px', marginBottom:6 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700, color: s.color, letterSpacing:'-0.5px' }}>
+                    {s.value ?? '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Donut distribusi */}
+          <div className="aw-card" style={{ padding:20 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:24 }}>
+              <NpsDonut promoters={k.promoters} passives={k.passives} detractors={k.detractors} />
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {[
+                  { label:'Promoter (9–10)', count:k.promoters, color:'#34C759', pct: k.total_respons ? Math.round(k.promoters/k.total_respons*100) : 0 },
+                  { label:'Passive (7–8)',   count:k.passives,  color:'#FF9500', pct: k.total_respons ? Math.round(k.passives/k.total_respons*100)  : 0 },
+                  { label:'Detractor (0–6)',count:k.detractors, color:'#FF3B30', pct: k.total_respons ? Math.round(k.detractors/k.total_respons*100): 0 },
+                ].map((item, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:10, height:10, borderRadius:3, background:item.color, flexShrink:0 }} />
+                    <span style={{ fontSize:13, color:'#1D1D1F', minWidth:130 }}>{item.label}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:'#1D1D1F', minWidth:30 }}>{item.count}</span>
+                    <span className={`aw-badge ${i===0?'badge-green':i===1?'badge-orange':'badge-red'}`}>{item.pct}%</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginLeft:'auto', textAlign:'right' }}>
+                <div style={{ fontSize:11, color:'rgba(60,60,67,0.45)', marginBottom:4 }}>Periode</div>
+                <div style={{ fontSize:13, fontWeight:500, color:'#1D1D1F' }}>
+                  {data.periode.dari} s/d {data.periode.sampai}
+                </div>
+                <div style={{ fontSize:11, color:'rgba(60,60,67,0.4)', marginTop:2 }}>
+                  Rata-rata skor: <strong>{k.rata_rata_skor ?? '—'}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabel detail pasien */}
+          <div className="aw-card" style={{ overflow:'hidden' }}>
+            <div style={{ padding:'16px 20px', borderBottom:'0.5px solid rgba(0,0,0,0.06)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <h2 style={{ fontSize:15, fontWeight:600, color:'#1D1D1F', letterSpacing:'-0.2px' }}>Detail Respons Pasien</h2>
+                <p style={{ fontSize:12, color:'rgba(60,60,67,0.5)', marginTop:2 }}>
+                  {(data.data||[]).length} respons dalam periode ini
+                </p>
+              </div>
+            </div>
+            {(data.data||[]).length === 0 ? (
+              <div style={{ padding:48, textAlign:'center', color:'rgba(60,60,67,0.4)' }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>⭐</div>
+                <div style={{ fontSize:14 }}>Belum ada data respons NPS</div>
+              </div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table className="aw-table">
+                  <thead>
+                    <tr>
+                      <th>Nama Pasien</th>
+                      <th>Unit Pelayanan</th>
+                      <th>Jenis Rawat</th>
+                      <th style={{ textAlign:'center' }}>Skor</th>
+                      <th>Segmen</th>
+                      <th>Komentar</th>
+                      <th>Waktu Skor</th>
+                      <th>Direspons CS?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.data||[]).map((d, i) => {
+                      const rowCls = d.segmen === 'detractor' ? 'row-det' : d.segmen === 'passive' ? 'row-pas' : 'row-pro';
+                      return (
+                        <tr key={i} className={rowCls}>
+                          <td style={{ fontWeight:500 }}>{d.nm_pasien || '—'}</td>
+                          <td>{d.nm_poli || '—'}</td>
+                          <td>{d.jenis_rawat || '—'}</td>
+                          <td style={{ textAlign:'center' }}>
+                            <span style={{
+                              display:'inline-flex', alignItems:'center', justifyContent:'center',
+                              width:28, height:28, borderRadius:8, fontWeight:700, fontSize:13,
+                              background: d.segmen==='promoter'?'rgba(52,199,89,0.14)':d.segmen==='passive'?'rgba(255,149,0,0.14)':'rgba(255,59,48,0.14)',
+                              color: d.segmen==='promoter'?'#1a7a35':d.segmen==='passive'?'#b25000':'#c0160c',
+                            }}>{d.skor ?? '—'}</span>
+                          </td>
+                          <td>
+                            <span className={`aw-badge ${d.segmen==='promoter'?'badge-green':d.segmen==='passive'?'badge-orange':'badge-red'}`}>
+                              {d.segmen==='promoter'?'🟢 Promoter':d.segmen==='passive'?'🟡 Passive':'🔴 Detractor'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize:12, color:'rgba(60,60,67,0.75)', maxWidth:200 }}>
+                            {d.komentar || <span style={{ color:'rgba(60,60,67,0.3)' }}>—</span>}
+                          </td>
+                          <td style={{ fontSize:11, color:'rgba(60,60,67,0.5)', whiteSpace:'nowrap' }}>
+                            {d.skor_at ? new Date(d.skor_at).toLocaleString('id-ID', { dateStyle:'short', timeStyle:'short' }) : '—'}
+                          </td>
+                          <td>
+                            {d.sudah_direspons_cs
+                              ? <span className="aw-badge badge-green">✓ Sudah</span>
+                              : <span className="aw-badge badge-red">✗ Belum</span>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Empty state */}
+      {!data && !loading && (
+        <div className="aw-card" style={{ padding:56, textAlign:'center', color:'rgba(60,60,67,0.4)' }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>📊</div>
+          <div style={{ fontSize:15, fontWeight:500, marginBottom:6 }}>Pilih rentang tanggal</div>
+          <div style={{ fontSize:13 }}>Tentukan periode lalu klik Tampilkan untuk melihat laporan NPS</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -397,6 +795,7 @@ export default function AdminWablas() {
             { key:'sessions', label:'💬 Session Aktif'  },
             { key:'trigger',  label:'▶️  Trigger Manual' },
             { key:'test',     label:'🧪 Uji Kirim'      },
+            { key:'nps',      label:'📊 Laporan NPS'    },
           ].map(t => (
             <button key={t.key} className={`aw-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
               {t.label}
@@ -621,12 +1020,6 @@ export default function AdminWablas() {
                 desc: 'Kirim reminder H-3 dan H-1 ke semua pasien yang jadwal kontrolnya sesuai target tanggal hari ini.',
                 color: '#007AFF', warn: false,
               },
-            //   {
-            //     cmd: 'reminder:kontrol',
-            //     icon: '📋', title: 'Reminder Kontrol',
-            //     desc: 'Kirim reminder surat kontrol BPJS ke pasien yang belum mendapat pengingat.',
-            //     color: '#34C759', warn: false,
-            //   },
               {
                 cmd: 'reminder:surkon',
                 icon: '📄', title: 'Reminder Surat Kontrol',
@@ -758,6 +1151,10 @@ export default function AdminWablas() {
             </div>
           </div>
         )}
+
+        {/* ── TAB: LAPORAN NPS ───────────────────────────────────────── */}
+        {tab === 'nps' && <NpsLaporan toast={toast} />}
+
       </div>
 
       <ToastContainer toasts={toasts} />
