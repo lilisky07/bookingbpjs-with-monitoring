@@ -522,43 +522,145 @@ const BorTargetSection = () => {
       .catch(() => {}).finally(() => setLoading(false));
   }, [tanggal]);
 
-  const t = (key) => dataBor?.targets?.[key] || {};
+  const bulanan   = dataBor?.targets?.bulanan   || {};
+  const harian    = dataBor?.targets?.harian    || {};
+  const kelasList = dataBor?.bor_bulanan_per_kelas || [];
+
+  // progress bar helper
+  const ProgressBar = ({ persen, target }) => {
+    const capped  = Math.min(persen, 100);
+    const tercapai = persen >= target;
+    const color   = tercapai ? '#34C759' : persen >= target * 0.8 ? '#FF9500' : '#FF3B30';
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, height: 6, background: 'rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ width: `${capped}%`, height: '100%', background: color, borderRadius: 10, transition: 'width 0.6s cubic-bezier(0.34,1.56,0.64,1)' }} />
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 600, color, minWidth: 38, textAlign: 'right' }}>{persen}%</span>
+      </div>
+    );
+  };
 
   return (
     <div style={{ marginTop: 32 }}>
       <SectionTitle icon="📈">Target BOR & Realisasi</SectionTitle>
+
+      {/* ── Date picker ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+        padding: '12px 16px', background: 'rgba(0,0,0,0.022)', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.06)' }}>
+        <div style={{ fontSize: 11, color: '#6E6E73', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Pilih Bulan</div>
+        <input type="month" className="apple-input" style={{ width: 160 }}
+          value={tanggal.slice(0, 7)}
+          onChange={e => setTanggal(e.target.value + '-01')} />
+        <button className="apple-btn apple-btn-secondary" style={{ fontSize: 12, padding: '6px 14px' }}
+          onClick={() => setTanggal(today())}>Bulan Ini</button>
+      </div>
+
       {loading ? <LoadingState /> : (
         <>
-          <div className="stat-grid">
-            <StatCard label="BOR Realisasi" value={`${dataBor?.bor_realisasi || 0}%`}
+          {/* ── Stat cards ringkasan ── */}
+          <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+            <StatCard label="BOR Real Time" icon="🛌"
+              value={`${dataBor?.bor_realisasi || 0}%`}
               sub={`TT: ${dataBor?.total_tempat_tidur || 0} · Terisi: ${dataBor?.total_terisi || 0}`}
-              color="#007AFF" icon="📊" />
-            {['harian','bulanan','tahunan'].map(k => (
-              <StatCard key={k} label={`Target ${k.charAt(0).toUpperCase()+k.slice(1)}`}
-                value={`${t(k).target || 0}%`}
-                sub={`Selisih: ${t(k).selisih >= 0 ? '+' : ''}${t(k).selisih || 0}%`}
-                color={t(k).selisih >= 0 ? '#34C759' : '#FF3B30'} />
-            ))}
+              color="#007AFF" />
+            <StatCard label="Target BOR Bulanan" icon="🎯"
+              value={`${bulanan.target_persen || 0}%`}
+              sub={`= 25 hari/TT dari ${bulanan.hari_dalam_bulan || 0} hari`}
+              color="#6E3AED" />
+            <StatCard label="Realisasi BOR Bulanan" icon="📊"
+              value={`${bulanan.realisasi_persen || 0}%`}
+              sub={`${bulanan.realisasi_hari || 0} hari perawatan`}
+              color={bulanan.status === 'tercapai' ? '#34C759' : '#FF3B30'} />
+            <StatCard label="Selisih Hari" icon={bulanan.selisih_hari >= 0 ? '✅' : '⚠️'}
+              value={`${bulanan.selisih_hari >= 0 ? '+' : ''}${bulanan.selisih_hari || 0}`}
+              sub={`Target: ${bulanan.target_hari_total || 0} hari total`}
+              color={bulanan.selisih_hari >= 0 ? '#34C759' : '#FF3B30'} />
+          </div>
+
+          {/* ── Progress BOR bulanan vs real time ── */}
+          <div className="apple-card" style={{ padding: '18px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#1D1D1F', marginBottom: 14 }}>
+              Perbandingan BOR — {bulanan.label || ''}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, color: '#6E6E73', fontWeight: 500 }}>BOR Real Time (snapshot hari ini)</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: harian.realisasi >= harian.target ? '#34C759' : '#FF3B30' }}>
+                    {harian.realisasi || 0}% <span style={{ color: '#8E8E93', fontWeight: 400 }}>/ target {harian.target || 78}%</span>
+                  </span>
+                </div>
+                <ProgressBar persen={harian.realisasi || 0} target={harian.target || 78} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, color: '#6E6E73', fontWeight: 500 }}>BOR Bulanan (akumulasi hari perawatan)</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: bulanan.status === 'tercapai' ? '#34C759' : '#FF3B30' }}>
+                    {bulanan.realisasi_persen || 0}% <span style={{ color: '#8E8E93', fontWeight: 400 }}>/ target {bulanan.target_persen || 0}%</span>
+                  </span>
+                </div>
+                <ProgressBar persen={bulanan.realisasi_persen || 0} target={bulanan.target_persen || 0} />
+              </div>
+            </div>
+            {/* garis target */}
+            <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(110,58,237,0.06)', borderRadius: 10,
+              border: '0.5px solid rgba(110,58,237,0.15)', fontSize: 12, color: '#5A1FBA', display: 'flex', gap: 16 }}>
+              <span>🎯 Target: <strong>25 hari</strong> per tempat tidur per bulan</span>
+              <span>·</span>
+              <span>Total TT: <strong>{dataBor?.total_tempat_tidur || 0}</strong></span>
+              <span>·</span>
+              <span>Target hari total: <strong>{bulanan.target_hari_total || 0}</strong> hari</span>
+              <span>·</span>
+              <span>Realisasi: <strong>{bulanan.realisasi_hari || 0}</strong> hari</span>
+            </div>
+          </div>
+
+          {/* ── Tabel per kelas (bulanan) ── */}
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#6E6E73', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>
+            Breakdown per Kelas — Hari Perawatan Bulan Ini
           </div>
           <TableWrap>
             <thead>
-              <tr><TH>Kelas Kamar</TH><TH>Total TT</TH><TH>Terisi</TH><TH>Tersedia</TH><TH>BOR</TH></tr>
+              <tr>
+                <TH>Kelas</TH>
+                <TH style={{ textAlign: 'center' }}>Total TT</TH>
+                <TH style={{ textAlign: 'center' }}>Hari Perawatan</TH>
+                <TH style={{ textAlign: 'center' }}>Target Hari</TH>
+                <TH style={{ textAlign: 'center' }}>Selisih</TH>
+                <TH style={{ textAlign: 'center' }}>BOR Bulanan</TH>
+                <TH style={{ textAlign: 'center' }}>Status</TH>
+              </tr>
             </thead>
             <tbody>
-              {dataBor?.bor_harian?.map((item, i) => (
-                <tr key={i} className="apple-table-row" style={{ animationDelay: `${i*0.03}s` }}>
-                  <TD style={{ fontWeight: 600 }}>{item.namakelas}</TD>
-                  <TD style={{ textAlign: 'center', fontWeight: 600 }}>{item.total_tt}</TD>
-                  <TD style={{ textAlign: 'center', color: '#FF3B30', fontWeight: 600 }}>{item.terisi}</TD>
-                  <TD style={{ textAlign: 'center', color: '#34C759', fontWeight: 600 }}>{item.tersedia}</TD>
-                  <TD style={{ textAlign: 'center' }}>
-                    <span className="pill" style={{
-                      background: item.bor >= 80 ? 'rgba(255,59,48,0.12)' : item.bor >= 60 ? 'rgba(255,204,0,0.15)' : 'rgba(52,199,89,0.12)',
-                      color: item.bor >= 80 ? '#C0392B' : item.bor >= 60 ? '#B8860B' : '#1D7A3A'
-                    }}>{item.bor}%</span>
-                  </TD>
-                </tr>
-              ))}
+              {kelasList.length === 0
+                ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#8E8E93', fontSize: 13 }}>Tidak ada data</td></tr>
+                : kelasList.map((item, i) => {
+                  const tercapai = item.status === 'tercapai';
+                  const selisih  = item.selisih_hari;
+                  return (
+                    <tr key={i} className="apple-table-row" style={{ animationDelay: `${i*0.04}s` }}>
+                      <TD style={{ fontWeight: 600 }}>{item.kelas}</TD>
+                      <TD style={{ textAlign: 'center', fontWeight: 600 }}>{item.total_tt}</TD>
+                      <TD style={{ textAlign: 'center', fontWeight: 700, color: '#007AFF' }}>{item.total_hari}</TD>
+                      <TD style={{ textAlign: 'center', color: '#6E6E73' }}>{item.target_hari}</TD>
+                      <TD style={{ textAlign: 'center', fontWeight: 700, color: selisih >= 0 ? '#34C759' : '#FF3B30' }}>
+                        {selisih >= 0 ? '+' : ''}{selisih}
+                      </TD>
+                      <TD style={{ textAlign: 'center' }}>
+                        <ProgressBar persen={item.bor} target={item.target_bor} />
+                      </TD>
+                      <TD style={{ textAlign: 'center' }}>
+                        <span className="pill" style={{
+                          background: tercapai ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.10)',
+                          color: tercapai ? '#1D7A3A' : '#C0392B'
+                        }}>
+                          {tercapai ? '✓ Tercapai' : '⚠ Belum'}
+                        </span>
+                      </TD>
+                    </tr>
+                  );
+                })}
             </tbody>
           </TableWrap>
         </>

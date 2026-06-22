@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Http;
 
 class ReminderHarian extends Command
 {
-    protected $signature   = 'reminder:harian';
-    protected $description = 'Kirim reminder H-3 dan H-1 kontrol pasien (jalan jam 16.00)';
+    protected $signature   = 'reminder:harian
+                                {--limit=5 : Maksimal jumlah reminder yang dikirim per run (default 5)}';
+    protected $description = 'Kirim reminder H-1 kontrol pasien (maks --limit per run, jalan jam 16.00)';
 
     const WABLAS_TOKEN    = 'VB8zjsrnjSBJ0ebc9VlnxuRcqM3hUXkGLSW9OeQh466Ht22MDLIm7Rd1UJ6KWNfP';
     const WABLAS_SECRET   = '4vWr3WU7';
@@ -19,81 +20,10 @@ class ReminderHarian extends Command
 
     public function handle()
     {
-        // =========================
-        // 1. REMINDER H-3
-        // =========================
-        // $dataH3 = DB::table('bridging_surat_kontrol_bpjs as sk')
-        //     ->join('bridging_sep as bs', 'sk.no_sep', '=', 'bs.no_sep')
-        //     ->join('reg_periksa as rp', 'bs.no_rawat', '=', 'rp.no_rawat')
-        //     ->join('pasien as p', 'rp.no_rkm_medis', '=', 'p.no_rkm_medis')
-        //     ->select(
-        //         'sk.no_sep',
-        //         'sk.nm_poli_bpjs as nm_poli',
-        //         'sk.nm_dokter_bpjs',
-        //         'sk.tgl_rencana',
-        //         'p.nm_pasien',
-        //         'p.no_tlp'
-        //     )
-        //     ->whereDate('sk.tgl_rencana', now()->addDays(3))
-        //     ->whereDate('sk.tgl_surat', '>=', now()->subDays(30))
-        //     ->whereNotNull('p.no_tlp')
-        //     ->where('p.no_tlp', '!=', '')
-        //     ->get();
-
-        // foreach ($dataH3 as $item) {
-        //     $no = $this->formatNomor($item->no_tlp);
-        //     if (!$no) continue;
-
-        //     if (DB::table('wa_surkon_sent')->where('no_sep', $item->no_sep)->exists()) {
-        //         echo "⏭ Skip (sudah kirim): {$item->nm_pasien}\n";
-        //         continue;
-        //     }
-
-        //     $jam  = $this->ambilJam($item->nm_dokter_bpjs, $item->tgl_rencana);
-        //     $hari = $this->getHariIndo($item->tgl_rencana);
-
-        //     $this->kirimListMessage($no, [
-        //         'title'       => '🔔 Pengingat H-3',
-        //         'description' => "Halo kak {$item->nm_pasien}, kembali mengingatkan jadwal kontrol kakak:\n\n"
-        //             . "🏥 Poli    : {$item->nm_poli}\n"
-        //             . "👨‍⚕️ Dokter  : {$item->nm_dokter_bpjs}\n"
-        //             . "📅 Tanggal : {$hari}, {$item->tgl_rencana}\n"
-        //             . "⏰ Jam     : {$jam}\n\n"
-        //             . "Apakah kakak ingin melakukan perubahan jadwal?",
-        //         'buttonText'  => 'Pilih',
-        //         'lists'       => [
-        //             ['title' => 'Ubah jadwal', 'description' => 'Saya ingin mengubah jadwal kontrol'],
-        //             ['title' => 'Tetap',       'description' => 'Saya tetap dengan jadwal yang ada'],
-        //         ],
-        //         'footer' => 'RSU GMC',
-        //     ], $item->nm_pasien);
-
-        //     DB::table('wa_surkon_sent')->insert([
-        //         'no_sep'     => $item->no_sep,
-        //         'no_tlp'     => $no,
-        //         'nm_pasien'  => $item->nm_pasien,
-        //         'created_at' => now(),
-        //         'updated_at' => now(),
-        //     ]);
-
-        //     WaConversationState::updateOrCreate(
-        //         ['phone' => $no],
-        //         [
-        //             'state'       => 'awaiting_reschedule_confirmation',
-        //             'nm_pasien'   => $item->nm_pasien,
-        //             'nm_poli'     => $item->nm_poli,
-        //             'nm_dokter'   => $item->nm_dokter_bpjs,
-        //             'tgl_rencana' => $item->tgl_rencana,
-        //             'kd_dokter'   => '',
-        //             'expires_at'  => now()->addHours(48),
-        //         ]
-        //     );
-
-        //     sleep(2);
-        // }
+        $limit = (int) $this->option('limit');
 
         // =========================
-        // 2. REMINDER H-1
+        // REMINDER H-1
         // =========================
         $dataH1 = DB::table('bridging_surat_kontrol_bpjs as sk')
             ->join('bridging_sep as bs', 'sk.no_sep', '=', 'bs.no_sep')
@@ -111,14 +41,31 @@ class ReminderHarian extends Command
             ->whereDate('sk.tgl_surat', '>=', now()->subDays(30))
             ->whereNotNull('p.no_tlp')
             ->where('p.no_tlp', '!=', '')
+            // Langsung filter di query — hanya yang belum pernah dikirim
+            ->whereNotIn('sk.no_sep', DB::table('wa_surkon_sent')->pluck('no_sep'))
             ->get();
 
-        foreach ($dataH1 as $item) {
-            $no = $this->formatNomor($item->no_tlp);
-            if (!$no) continue;
+        if ($dataH1->isEmpty()) {
+            $this->info('Tidak ada reminder H-1 yang perlu dikirim.');
+            echo "✅ Selesai!\n";
+            return;
+        }
 
-            if (DB::table('wa_surkon_sent')->where('no_sep', $item->no_sep)->exists()) {
-                echo "⏭ Skip (sudah kirim): {$item->nm_pasien}\n";
+        $this->info("📋 Total kandidat H-1: {$dataH1->count()} | Kuota per run: {$limit}");
+
+        $terkirim = 0;
+        $dilewati = 0;
+
+        foreach ($dataH1 as $item) {
+            // Berhenti kalau kuota run sudah penuh
+            if ($terkirim >= $limit) {
+                $this->warn("⏸ Kuota {$limit} tercapai, sisanya akan diproses pada run berikutnya.");
+                break;
+            }
+
+            $no = $this->formatNomor($item->no_tlp);
+            if (!$no) {
+                $dilewati++;
                 continue;
             }
 
@@ -162,9 +109,13 @@ class ReminderHarian extends Command
                 ]
             );
 
+            $terkirim++;
+            $this->info("✓ Reminder [{$terkirim}/{$limit}] → {$item->nm_pasien} ({$no})");
+
             sleep(2);
         }
 
+        $this->info("\nSelesai. Terkirim: {$terkirim} | Dilewati/Gagal: {$dilewati}");
         echo "✅ Selesai!\n";
     }
 

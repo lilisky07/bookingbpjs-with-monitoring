@@ -1,184 +1,382 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
-/* ─── GLOBAL STYLES (Apple-style, matching MonitoringPage) ──────── */
+/* ─── GLOBAL STYLES (Apple-inspired, eye-catching) ──────────────── */
 const adminStyle = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.13); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
 
-  @keyframes fadeIn       { from { opacity:0 }                           to { opacity:1 } }
-  @keyframes slideUp      { from { transform:translateY(16px);opacity:0 } to { transform:translateY(0);opacity:1 } }
-  @keyframes scaleIn      { from { transform:scale(0.96);opacity:0 }      to { transform:scale(1);opacity:1 } }
-  @keyframes spin         { to   { transform:rotate(360deg) } }
-  @keyframes pulseGreen   { 0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,0)}  50%{box-shadow:0 0 0 5px rgba(52,199,89,0.18)} }
-  @keyframes shimmer      { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-  @keyframes toastIn      { from{transform:translateY(16px) scale(0.97);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+  /* ── KEYFRAMES ─────────────────────────────────────────────── */
+  @keyframes fadeIn    { from{opacity:0}                              to{opacity:1} }
+  @keyframes slideUp   { from{transform:translateY(20px);opacity:0}  to{transform:translateY(0);opacity:1} }
+  @keyframes slideDown { from{transform:translateY(-10px);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes scaleIn   { from{transform:scale(0.94);opacity:0}       to{transform:scale(1);opacity:1} }
+  @keyframes spin      { to{transform:rotate(360deg)} }
+  @keyframes shimmer   { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  @keyframes toastIn   { from{transform:translateX(24px) scale(0.95);opacity:0} to{transform:translateX(0) scale(1);opacity:1} }
+  @keyframes pulseGreen{ 0%,100%{box-shadow:0 0 0 0 rgba(52,199,89,0)} 50%{box-shadow:0 0 0 6px rgba(52,199,89,0.2)} }
+  @keyframes pulseBlue { 0%,100%{box-shadow:0 0 0 0 rgba(0,122,255,0)} 50%{box-shadow:0 0 0 6px rgba(0,122,255,0.18)} }
+  @keyframes float     { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+  @keyframes glow      { 0%,100%{opacity:0.6} 50%{opacity:1} }
+  @keyframes statPop   { 0%{transform:translateY(12px) scale(0.96);opacity:0} 60%{transform:translateY(-3px) scale(1.01)} 100%{transform:translateY(0) scale(1);opacity:1} }
+  @keyframes ripple    { to{transform:scale(2.5);opacity:0} }
 
+  /* ── CARDS ─────────────────────────────────────────────────── */
   .aw-card {
-    background: rgba(255,255,255,0.82);
-    backdrop-filter: blur(24px) saturate(200%);
-    -webkit-backdrop-filter: blur(24px) saturate(200%);
-    border-radius: 18px;
-    border: 0.5px solid rgba(255,255,255,0.9);
-    box-shadow: 0 2px 20px rgba(0,0,0,0.055), 0 0 0 0.5px rgba(0,0,0,0.04);
-    transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.28s ease;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255,255,255,0.95);
+    box-shadow:
+      0 2px 1px rgba(255,255,255,0.7) inset,
+      0 -1px 1px rgba(0,0,0,0.04) inset,
+      0 4px 24px rgba(0,0,0,0.06),
+      0 0 0 0.5px rgba(0,0,0,0.05);
+    transition:
+      transform 0.3s cubic-bezier(0.34,1.56,0.64,1),
+      box-shadow 0.3s ease,
+      border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .aw-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent);
+    pointer-events: none;
+  }
+  .aw-card.hoverable {
+    cursor: pointer;
   }
   .aw-card.hoverable:hover {
-    transform: translateY(-2px) scale(1.005);
-    box-shadow: 0 10px 32px rgba(0,0,0,0.09);
+    transform: translateY(-4px) scale(1.012);
+    box-shadow:
+      0 2px 1px rgba(255,255,255,0.7) inset,
+      0 -1px 1px rgba(0,0,0,0.04) inset,
+      0 16px 48px rgba(0,0,0,0.1),
+      0 4px 12px rgba(0,0,0,0.06),
+      0 0 0 0.5px rgba(0,122,255,0.18);
+    border-color: rgba(0,122,255,0.15);
+  }
+  .aw-card.hoverable:active {
+    transform: translateY(-1px) scale(1.004);
+    transition-duration: 0.1s;
   }
 
+  /* ── STAT CARD ──────────────────────────────────────────────── */
+  .stat-card {
+    animation: statPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: -30%; right: -10%;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: var(--stat-color, #007AFF);
+    opacity: 0.06;
+    filter: blur(20px);
+    pointer-events: none;
+  }
+  .stat-card:hover {
+    transform: translateY(-5px) scale(1.025) !important;
+    box-shadow:
+      0 2px 1px rgba(255,255,255,0.7) inset,
+      0 20px 56px rgba(0,0,0,0.11),
+      0 6px 16px rgba(0,0,0,0.06),
+      0 0 0 0.5px var(--stat-color, #007AFF) !important;
+  }
+
+  /* ── BUTTONS ────────────────────────────────────────────────── */
   .aw-btn {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-    font-size: 13px; font-weight: 500; border-radius: 10px;
-    border: none; cursor: pointer; letter-spacing: -0.1px;
-    transition: transform 0.14s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease, opacity 0.15s;
+    font-size: 13px; font-weight: 500;
+    border-radius: 11px;
+    border: none; cursor: pointer;
+    letter-spacing: -0.1px;
+    position: relative; overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    transition:
+      transform 0.16s cubic-bezier(0.34,1.56,0.64,1),
+      box-shadow 0.2s ease,
+      background 0.15s ease,
+      opacity 0.15s ease;
   }
-  .aw-btn:hover  { transform: scale(1.04); }
-  .aw-btn:active { transform: scale(0.95); }
-  .aw-btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
-  .aw-btn-primary   { background:#007AFF; color:#fff; padding:8px 18px; }
-  .aw-btn-primary:hover { box-shadow:0 4px 16px rgba(0,122,255,0.35); }
-  .aw-btn-green     { background:#34C759; color:#fff; padding:8px 18px; }
-  .aw-btn-green:hover  { box-shadow:0 4px 16px rgba(52,199,89,0.35); }
-  .aw-btn-red       { background:#FF3B30; color:#fff; padding:8px 18px; }
-  .aw-btn-red:hover    { box-shadow:0 4px 16px rgba(255,59,48,0.35); }
-  .aw-btn-ghost     { background:rgba(120,120,128,0.12); color:#1D1D1F; padding:8px 16px; border:0.5px solid rgba(0,0,0,0.09); }
-  .aw-btn-ghost:hover  { background:rgba(120,120,128,0.18); }
-  .aw-btn-sm { padding:6px 14px; font-size:12px; }
+  .aw-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .aw-btn:hover  { transform: scale(1.05) translateY(-1px); }
+  .aw-btn:active { transform: scale(0.94); transition-duration: 0.08s; }
+  .aw-btn:disabled { opacity: 0.38; cursor: not-allowed; transform: none !important; }
 
+  .aw-btn-primary {
+    background: linear-gradient(180deg, #2196FF 0%, #007AFF 100%);
+    color: #fff; padding: 8px 18px;
+    box-shadow: 0 2px 8px rgba(0,122,255,0.28), 0 1px 2px rgba(0,122,255,0.2);
+  }
+  .aw-btn-primary:hover {
+    background: linear-gradient(180deg, #3DAAFF 0%, #1A8FFF 100%);
+    box-shadow: 0 6px 20px rgba(0,122,255,0.38), 0 2px 6px rgba(0,122,255,0.25);
+  }
+
+  .aw-btn-green {
+    background: linear-gradient(180deg, #4CD964 0%, #34C759 100%);
+    color: #fff; padding: 8px 18px;
+    box-shadow: 0 2px 8px rgba(52,199,89,0.3), 0 1px 2px rgba(52,199,89,0.2);
+  }
+  .aw-btn-green:hover {
+    background: linear-gradient(180deg, #60E070 0%, #48D868 100%);
+    box-shadow: 0 6px 20px rgba(52,199,89,0.4), 0 2px 6px rgba(52,199,89,0.25);
+  }
+
+  .aw-btn-red {
+    background: linear-gradient(180deg, #FF5247 0%, #FF3B30 100%);
+    color: #fff; padding: 8px 18px;
+    box-shadow: 0 2px 8px rgba(255,59,48,0.3), 0 1px 2px rgba(255,59,48,0.2);
+  }
+  .aw-btn-red:hover {
+    box-shadow: 0 6px 20px rgba(255,59,48,0.4);
+  }
+
+  .aw-btn-ghost {
+    background: rgba(120,120,128,0.1);
+    color: #1D1D1F; padding: 8px 16px;
+    border: 0.5px solid rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .aw-btn-ghost:hover {
+    background: rgba(120,120,128,0.17);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.09);
+    border-color: rgba(0,0,0,0.14);
+  }
+
+  .aw-btn-sm { padding: 6px 14px; font-size: 12px; }
+
+  /* ── INPUTS ─────────────────────────────────────────────────── */
   .aw-input {
     font-family: inherit; font-size: 14px;
-    background: rgba(120,120,128,0.08);
-    border: 0.5px solid rgba(0,0,0,0.1);
-    border-radius: 10px; padding: 9px 13px;
+    background: rgba(120,120,128,0.07);
+    border: 1px solid rgba(0,0,0,0.09);
+    border-radius: 11px; padding: 9px 13px;
     outline: none; width: 100%; color: #1D1D1F;
-    transition: border-color 0.18s, box-shadow 0.18s;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .aw-input:hover {
+    border-color: rgba(0,0,0,0.16);
+    background: rgba(120,120,128,0.09);
   }
   .aw-input:focus {
     border-color: #007AFF;
-    box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
-    background: rgba(255,255,255,0.95);
+    box-shadow: 0 0 0 3.5px rgba(0,122,255,0.14);
+    background: rgba(255,255,255,0.98);
   }
-  .aw-input::placeholder { color: rgba(60,60,67,0.4); }
+  .aw-input::placeholder { color: rgba(60,60,67,0.38); }
 
   .aw-label {
-    font-size:12px; font-weight:600; letter-spacing:-0.1px;
-    color: rgba(60,60,67,0.7); margin-bottom:5px; display:block;
-    text-transform: uppercase; font-size:11px; letter-spacing:0.3px;
+    font-size: 11px; font-weight: 600;
+    color: rgba(60,60,67,0.65);
+    margin-bottom: 5px; display: block;
+    text-transform: uppercase; letter-spacing: 0.35px;
   }
 
+  /* ── BADGES ─────────────────────────────────────────────────── */
   .aw-badge {
-    display:inline-flex; align-items:center; gap:4px;
-    font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px;
-    letter-spacing:0.1px;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 99px;
+    letter-spacing: 0.1px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-  .badge-green  { background:rgba(52,199,89,0.12);  color:#1a7a35; }
-  .badge-orange { background:rgba(255,149,0,0.12);  color:#b25000; }
-  .badge-red    { background:rgba(255,59,48,0.12);   color:#c0160c; }
-  .badge-blue   { background:rgba(0,122,255,0.1);   color:#0058cc; }
-  .badge-gray   { background:rgba(120,120,128,0.12); color:#5a5a63; }
-  .badge-purple { background:rgba(175,82,222,0.12); color:#6e1f9c; }
+  .aw-badge:hover { transform: scale(1.06); }
+  .badge-green  { background: rgba(52,199,89,0.13);  color: #1a7a35; box-shadow: 0 1px 4px rgba(52,199,89,0.15); }
+  .badge-orange { background: rgba(255,149,0,0.13);  color: #b25000; box-shadow: 0 1px 4px rgba(255,149,0,0.15); }
+  .badge-red    { background: rgba(255,59,48,0.13);  color: #c0160c; box-shadow: 0 1px 4px rgba(255,59,48,0.15); }
+  .badge-blue   { background: rgba(0,122,255,0.11);  color: #0058cc; box-shadow: 0 1px 4px rgba(0,122,255,0.12); }
+  .badge-gray   { background: rgba(120,120,128,0.12);color: #5a5a63; }
+  .badge-purple { background: rgba(175,82,222,0.13); color: #6e1f9c; box-shadow: 0 1px 4px rgba(175,82,222,0.15); }
 
+  /* ── TABS ───────────────────────────────────────────────────── */
   .aw-tab {
-    font-size:13px; font-weight:500; padding:7px 16px;
-    border-radius:9px; cursor:pointer; transition:all 0.18s;
-    color:rgba(60,60,67,0.7); white-space:nowrap;
-    border:none; background:transparent;
+    font-size: 13px; font-weight: 500; padding: 7px 16px;
+    border-radius: 10px; cursor: pointer;
+    color: rgba(60,60,67,0.65); white-space: nowrap;
+    border: none; background: transparent;
+    transition: color 0.18s, background 0.18s, transform 0.18s, box-shadow 0.18s;
+    position: relative;
   }
   .aw-tab.active {
-    background:#fff; color:#007AFF;
-    box-shadow:0 2px 8px rgba(0,0,0,0.09), 0 0 0 0.5px rgba(0,0,0,0.06);
+    background: #fff; color: #007AFF; font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1), 0 0 0 0.5px rgba(0,0,0,0.07);
   }
-  .aw-tab:hover:not(.active) { color:#1D1D1F; background:rgba(120,120,128,0.07); }
+  .aw-tab:hover:not(.active) {
+    color: #1D1D1F;
+    background: rgba(120,120,128,0.08);
+    transform: translateY(-1px);
+  }
+  .aw-tab:active { transform: scale(0.96); }
 
-  .aw-table { width:100%; border-collapse:collapse; }
+  /* ── TABLES ─────────────────────────────────────────────────── */
+  .aw-table { width: 100%; border-collapse: collapse; }
   .aw-table th {
-    font-size:11px; font-weight:600; color:rgba(60,60,67,0.55);
-    text-transform:uppercase; letter-spacing:0.4px;
-    padding:9px 14px; text-align:left;
-    border-bottom:0.5px solid rgba(0,0,0,0.07);
+    font-size: 11px; font-weight: 600; color: rgba(60,60,67,0.5);
+    text-transform: uppercase; letter-spacing: 0.45px;
+    padding: 10px 14px; text-align: left;
+    border-bottom: 0.5px solid rgba(0,0,0,0.07);
+    background: rgba(248,248,248,0.7);
   }
   .aw-table td {
-    font-size:13px; color:#1D1D1F; padding:11px 14px;
-    border-bottom:0.5px solid rgba(0,0,0,0.05);
-    transition: background 0.12s;
+    font-size: 13px; color: #1D1D1F; padding: 12px 14px;
+    border-bottom: 0.5px solid rgba(0,0,0,0.045);
+    transition: background 0.15s;
   }
-  .aw-table tr:hover td { background:rgba(0,122,255,0.025); }
-  .aw-table tr:last-child td { border-bottom:none; }
-  .aw-table tr.row-det td { background:rgba(255,59,48,0.04); }
-  .aw-table tr.row-pas td { background:rgba(255,149,0,0.04); }
-  .aw-table tr.row-pro td { background:rgba(52,199,89,0.04); }
+  .aw-table tr { transition: background 0.15s; }
+  .aw-table tbody tr:hover td {
+    background: rgba(0,122,255,0.035);
+  }
+  .aw-table tr:last-child td { border-bottom: none; }
+  .aw-table tr.row-det td { background: rgba(255,59,48,0.04); }
+  .aw-table tr.row-pas td { background: rgba(255,149,0,0.04); }
+  .aw-table tr.row-pro td { background: rgba(52,199,89,0.04); }
+  .aw-table tr.row-det:hover td { background: rgba(255,59,48,0.08) !important; }
+  .aw-table tr.row-pas:hover td { background: rgba(255,149,0,0.08) !important; }
+  .aw-table tr.row-pro:hover td { background: rgba(52,199,89,0.08) !important; }
 
+  /* ── STATUS DOTS ────────────────────────────────────────────── */
   .status-dot {
-    width:7px; height:7px; border-radius:50%; display:inline-block;
-    flex-shrink:0;
+    width: 7px; height: 7px; border-radius: 50%;
+    display: inline-block; flex-shrink: 0;
   }
-  .dot-green  { background:#34C759; animation:pulseGreen 2s infinite; }
-  .dot-orange { background:#FF9500; }
-  .dot-red    { background:#FF3B30; }
-  .dot-gray   { background:#8E8E93; }
+  .dot-green  { background: #34C759; animation: pulseGreen 2.2s infinite; }
+  .dot-orange { background: #FF9500; }
+  .dot-red    { background: #FF3B30; }
+  .dot-gray   { background: #8E8E93; }
 
+  /* ── SKELETON ───────────────────────────────────────────────── */
   .skeleton {
-    background: linear-gradient(90deg, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.09) 50%, rgba(0,0,0,0.05) 75%);
+    background: linear-gradient(90deg,
+      rgba(0,0,0,0.05) 0%,
+      rgba(0,0,0,0.09) 40%,
+      rgba(0,0,0,0.05) 80%
+    );
     background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius:8px;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
   }
 
+  /* ── TOAST ──────────────────────────────────────────────────── */
   .toast-wrap {
-    position:fixed; bottom:28px; right:28px; z-index:9999;
-    display:flex; flex-direction:column; gap:8px; pointer-events:none;
+    position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
   }
   .toast {
-    animation: toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
-    backdrop-filter:blur(20px) saturate(200%);
-    -webkit-backdrop-filter:blur(20px) saturate(200%);
-    border-radius:14px; padding:12px 18px;
-    font-size:13px; font-weight:500; pointer-events:auto;
-    border:0.5px solid rgba(255,255,255,0.6);
-    box-shadow:0 8px 32px rgba(0,0,0,0.14);
-    display:flex; align-items:center; gap:8px;
-    min-width:240px; max-width:340px;
+    animation: toastIn 0.38s cubic-bezier(0.34,1.56,0.64,1) both;
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border-radius: 16px; padding: 13px 18px;
+    font-size: 13px; font-weight: 500;
+    pointer-events: auto;
+    border: 0.5px solid rgba(255,255,255,0.5);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1);
+    display: flex; align-items: center; gap: 9px;
+    min-width: 240px; max-width: 340px;
   }
-  .toast-success { background:rgba(52,199,89,0.92);  color:#fff; }
-  .toast-error   { background:rgba(255,59,48,0.92);   color:#fff; }
-  .toast-info    { background:rgba(0,122,255,0.92);   color:#fff; }
+  .toast-success { background: rgba(47,185,80,0.93);  color: #fff; }
+  .toast-error   { background: rgba(242,54,44,0.93);  color: #fff; }
+  .toast-info    { background: rgba(0,118,245,0.93);  color: #fff; }
 
-  .section-enter { animation: slideUp 0.38s cubic-bezier(0.34,1.56,0.64,1) both; }
+  /* ── SECTION ENTER ──────────────────────────────────────────── */
+  .section-enter { animation: slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
 
+  /* ── TOGGLE ─────────────────────────────────────────────────── */
   .toggle-track {
-    width:38px; height:22px; border-radius:11px; position:relative;
-    cursor:pointer; transition:background 0.22s;
-    flex-shrink:0;
+    width: 40px; height: 24px; border-radius: 12px;
+    position: relative; cursor: pointer;
+    transition: background 0.25s, box-shadow 0.25s;
+    flex-shrink: 0;
   }
+  .toggle-track:hover { box-shadow: 0 0 0 4px rgba(52,199,89,0.15); }
   .toggle-thumb {
-    position:absolute; top:2px; left:2px;
-    width:18px; height:18px; border-radius:50%; background:#fff;
-    box-shadow:0 1px 4px rgba(0,0,0,0.22);
-    transition:left 0.22s cubic-bezier(0.34,1.56,0.64,1);
+    position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.26), 0 0 1px rgba(0,0,0,0.1);
+    transition: left 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
   }
-  .toggle-on  { background:#34C759; }
-  .toggle-on .toggle-thumb  { left:18px; }
-  .toggle-off { background:rgba(120,120,128,0.28); }
+  .toggle-on  { background: linear-gradient(135deg, #4CD964, #34C759); }
+  .toggle-on .toggle-thumb  { left: 19px; }
+  .toggle-off { background: rgba(120,120,128,0.24); }
 
-  /* NPS Score gauge bar */
+  /* ── NPS GAUGE ──────────────────────────────────────────────── */
   .nps-gauge-track {
-    height:6px; border-radius:99px;
-    background:rgba(0,0,0,0.07); overflow:hidden;
+    height: 7px; border-radius: 99px;
+    background: rgba(0,0,0,0.07); overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
   }
   .nps-gauge-fill {
-    height:100%; border-radius:99px;
-    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    height: 100%; border-radius: 99px;
+    transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  /* ── PING RESULT ────────────────────────────────────────────── */
+  .ping-ok  { background:linear-gradient(135deg,rgba(52,199,89,0.12),rgba(52,199,89,0.06)); color:#1a7a35; border:0.5px solid rgba(52,199,89,0.28); }
+  .ping-err { background:linear-gradient(135deg,rgba(255,59,48,0.12),rgba(255,59,48,0.06)); color:#c0160c; border:0.5px solid rgba(255,59,48,0.28); }
+
+  /* ── TRIGGER CARDS hover glow ───────────────────────────────── */
+  .trigger-card { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease; cursor:default; }
+  .trigger-card:hover {
+    transform: translateY(-5px) scale(1.015);
+    box-shadow:
+      0 2px 1px rgba(255,255,255,0.7) inset,
+      0 20px 52px rgba(0,0,0,0.1),
+      0 6px 14px rgba(0,0,0,0.06),
+      0 0 0 0.5px var(--glow-color, rgba(0,122,255,0.2));
+  }
+
+  /* ── SESSION TABLE ROW ──────────────────────────────────────── */
+  .session-row { transition: background 0.15s, transform 0.15s; }
+  .session-row:hover { background: rgba(0,122,255,0.03); }
+
+  /* ── ICON ORBS ──────────────────────────────────────────────── */
+  .icon-orb {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 13px; flex-shrink: 0;
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease;
+  }
+  .aw-card.hoverable:hover .icon-orb,
+  .trigger-card:hover .icon-orb {
+    transform: scale(1.12) rotate(-4deg);
+    box-shadow: 0 4px 14px var(--orb-shadow, rgba(0,122,255,0.25));
+  }
+
+  /* ── HEADER PILL ────────────────────────────────────────────── */
+  .header-status-pill {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .header-status-pill:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
   }
 `;
 
@@ -212,22 +410,34 @@ function Toggle({ on, onChange }) {
 }
 
 /* ─── STAT CARD ──────────────────────────────────────────────────── */
-function StatCard({ icon, label, value, sub, color = '#007AFF', loading }) {
+function StatCard({ icon, label, value, sub, color = '#007AFF', loading, delay = 0 }) {
   return (
-    <div className="aw-card" style={{ padding: '18px 20px', flex: 1, minWidth: 160 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: 9,
-          background: color + '18', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontSize: 16,
-        }}>{icon}</div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(60,60,67,0.6)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</span>
+    <div
+      className="aw-card stat-card hoverable"
+      style={{
+        padding: '20px 22px', flex: 1, minWidth: 160,
+        '--stat-color': color,
+        animationDelay: delay + 'ms',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12 }}>
+        <div
+          className="icon-orb"
+          style={{
+            width: 38, height: 38,
+            background: `linear-gradient(135deg, ${color}22, ${color}11)`,
+            fontSize: 18,
+            boxShadow: `0 2px 8px ${color}22`,
+            '--orb-shadow': color + '40',
+          }}
+        >{icon}</div>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(60,60,67,0.55)', textTransform: 'uppercase', letterSpacing: '0.35px' }}>{label}</span>
       </div>
       {loading
-        ? <div className="skeleton" style={{ height: 28, width: '60%', marginBottom: 6 }} />
-        : <div style={{ fontSize: 26, fontWeight: 700, color: '#1D1D1F', letterSpacing: '-0.5px' }}>{value}</div>
+        ? <div className="skeleton" style={{ height: 30, width: '60%', marginBottom: 6 }} />
+        : <div style={{ fontSize: 28, fontWeight: 700, color: '#1D1D1F', letterSpacing: '-0.8px', lineHeight: 1 }}>{value}</div>
       }
-      {sub && <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.5)', marginTop: 3 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: 'rgba(60,60,67,0.45)', marginTop: 5 }}>{sub}</div>}
     </div>
   );
 }
@@ -270,10 +480,11 @@ function NpsDonut({ promoters = 0, passives = 0, detractors = 0 }) {
 
 /* ─── TAB NPS LAPORAN ────────────────────────────────────────────── */
 function NpsLaporan({ toast }) {
-  const [dari,    setDari]    = useState('');
-  const [sampai,  setSampai]  = useState('');
-  const [loading, setLoading] = useState(false);
-  const [data,    setData]    = useState(null);
+  const [dari,          setDari]          = useState('');
+  const [sampai,        setSampai]        = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [data,          setData]          = useState(null);
+  const [selectedBulan, setSelectedBulan] = useState(null); // 'YYYY-MM' atau null
 
   // Default range: 30 hari terakhir
   useEffect(() => {
@@ -282,6 +493,21 @@ function NpsLaporan({ toast }) {
     setSampai(now.toISOString().split('T')[0]);
     setDari(ago.toISOString().split('T')[0]);
   }, []);
+
+  // Klik tombol bulan → set dari/sampai ke awal-akhir bulan itu lalu fetch
+  const pilihBulan = useCallback((ym) => {
+    const [y, m] = ym.split('-').map(Number);
+    const awal   = new Date(y, m - 1, 1);
+    const akhir  = new Date(y, m, 0);           // hari terakhir bulan
+    const fmt    = d => d.toISOString().split('T')[0];
+    setDari(fmt(awal));
+    setSampai(fmt(akhir));
+    setSelectedBulan(ym);
+  }, []);
+
+  // Reset selectedBulan kalau user edit manual input tanggal
+  const handleDariChange  = (val) => { setDari(val);   setSelectedBulan(null); };
+  const handleSampaiChange= (val) => { setSampai(val); setSelectedBulan(null); };
 
   const fetchLaporan = useCallback(async () => {
     if (!dari || !sampai) { toast('Pilih rentang tanggal terlebih dahulu', 'error'); return; }
@@ -296,6 +522,12 @@ function NpsLaporan({ toast }) {
       setLoading(false);
     }
   }, [dari, sampai, toast]);
+
+  // Auto-fetch saat selectedBulan berubah (setelah dari/sampai terupdate)
+  useEffect(() => {
+    if (selectedBulan && dari && sampai) fetchLaporan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBulan]);
 
   /* ── Export PDF (pakai print CSS) ── */
   const handleExportPDF = () => {
@@ -403,14 +635,64 @@ function NpsLaporan({ toast }) {
 
       {/* ── Filter tanggal ── */}
       <div className="aw-card" style={{ padding:20 }}>
+
+        {/* Baris tombol bulan */}
+        {(() => {
+          const now    = new Date();
+          const bulanList = [];
+          for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const label = d.toLocaleDateString('id-ID', { month:'short', year:'2-digit' });
+            bulanList.push({ ym, label });
+          }
+          return (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, fontWeight:600, color:'rgba(60,60,67,0.45)', textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:8 }}>
+                Pilih Bulan
+              </div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {bulanList.map(({ ym, label }) => {
+                  const isActive = selectedBulan === ym;
+                  return (
+                    <button
+                      key={ym}
+                      onClick={() => pilihBulan(ym)}
+                      disabled={loading}
+                      style={{
+                        padding:'5px 11px',
+                        borderRadius:8,
+                        border: isActive ? '1.5px solid #007AFF' : '1px solid rgba(0,0,0,0.12)',
+                        background: isActive ? '#007AFF' : 'rgba(0,0,0,0.03)',
+                        color: isActive ? '#fff' : '#1D1D1F',
+                        fontSize:12,
+                        fontWeight: isActive ? 600 : 400,
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        opacity: loading ? 0.5 : 1,
+                        transition:'all 0.15s ease',
+                        letterSpacing:'-0.1px',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Divider */}
+        <div style={{ height:'0.5px', background:'rgba(0,0,0,0.07)', margin:'2px 0 14px' }} />
+
         <div style={{ display:'flex', alignItems:'flex-end', gap:12, flexWrap:'wrap' }}>
           <div style={{ flex:1, minWidth:140 }}>
             <label className="aw-label">Dari tanggal</label>
-            <input type="date" className="aw-input" value={dari} onChange={e => setDari(e.target.value)} />
+            <input type="date" className="aw-input" value={dari} onChange={e => handleDariChange(e.target.value)} />
           </div>
           <div style={{ flex:1, minWidth:140 }}>
             <label className="aw-label">Sampai tanggal</label>
-            <input type="date" className="aw-input" value={sampai} onChange={e => setSampai(e.target.value)} />
+            <input type="date" className="aw-input" value={sampai} onChange={e => handleSampaiChange(e.target.value)} />
           </div>
           <button
             className="aw-btn aw-btn-primary"
@@ -756,25 +1038,25 @@ export default function AdminWablas() {
 
   /* ── render ──────────────────────────────────────────────────── */
   return (
-    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#f0f4f8 0%,#e8edf5 100%)', padding:'28px 24px 60px' }}>
+    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#eef2f8 0%,#e5ecf7 40%,#dde7f5 100%)', padding:'28px 24px 60px' }}>
       <style>{adminStyle}</style>
 
       {/* HEADER */}
       <div style={{ maxWidth:1100, margin:'0 auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28 }}>
           <div>
-            <h1 style={{ fontSize:26, fontWeight:700, color:'#1D1D1F', letterSpacing:'-0.6px', marginBottom:3 }}>
+            <h1 style={{ fontSize:28, fontWeight:700, color:'#1D1D1F', letterSpacing:'-0.8px', marginBottom:4 }}>
               📲 Admin Wablas
             </h1>
-            <p style={{ fontSize:13, color:'rgba(60,60,67,0.55)' }}>
+            <p style={{ fontSize:13, color:'rgba(60,60,67,0.5)', letterSpacing:'-0.1px' }}>
               Kelola konfigurasi, monitoring, dan trigger WA RSU GMC
             </p>
           </div>
 
-          {/* Status dot */}
-          <div className="aw-card" style={{ padding:'9px 16px', display:'flex', alignItems:'center', gap:8 }}>
+          {/* Status pill */}
+          <div className="aw-card header-status-pill" style={{ padding:'10px 18px', display:'flex', alignItems:'center', gap:9 }}>
             <span className={`status-dot ${pingResult?.ok === false ? 'dot-red' : 'dot-green'}`} />
-            <span style={{ fontSize:12, fontWeight:500, color:'rgba(60,60,67,0.7)' }}>
+            <span style={{ fontSize:13, fontWeight:500, color:'rgba(60,60,67,0.75)', letterSpacing:'-0.1px' }}>
               {pingResult?.ok === false ? 'Offline' : 'Online'}
             </span>
           </div>
@@ -782,10 +1064,10 @@ export default function AdminWablas() {
 
         {/* STAT CARDS */}
         <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap' }}>
-          <StatCard icon="💬" label="Session Aktif"  value={stats?.active_sessions ?? '—'} sub="percakapan berlangsung" color="#007AFF" loading={statsLoading} />
-          <StatCard icon="📨" label="Reminder H-3"   value={stats?.reminder_h3_today ?? '—'} sub="terkirim hari ini" color="#34C759" loading={statsLoading} />
-          <StatCard icon="🔔" label="Reminder H-1"   value={stats?.reminder_h1_today ?? '—'} sub="terkirim hari ini" color="#FF9500" loading={statsLoading} />
-          <StatCard icon="⭐" label="NPS Terkirim"   value={stats?.nps_today ?? '—'} sub="survei hari ini"   color="#AF52DE" loading={statsLoading} />
+          <StatCard icon="💬" label="Session Aktif"  value={stats?.active_sessions ?? '—'} sub="percakapan berlangsung" color="#007AFF" loading={statsLoading} delay={0}   />
+          <StatCard icon="📨" label="Reminder H-3"   value={stats?.reminder_h3_today ?? '—'} sub="terkirim hari ini"   color="#34C759" loading={statsLoading} delay={60}  />
+          <StatCard icon="🔔" label="Reminder H-1"   value={stats?.reminder_h1_today ?? '—'} sub="terkirim hari ini"   color="#FF9500" loading={statsLoading} delay={120} />
+          <StatCard icon="⭐" label="NPS Terkirim"   value={stats?.nps_today ?? '—'}          sub="survei hari ini"     color="#AF52DE" loading={statsLoading} delay={180} />
         </div>
 
         {/* TABS */}
@@ -828,11 +1110,9 @@ export default function AdminWablas() {
 
               {pingResult && (
                 <div style={{
-                  padding:'9px 13px', borderRadius:10, marginBottom:16, fontSize:12,
-                  background: pingResult.ok ? 'rgba(52,199,89,0.1)' : 'rgba(255,59,48,0.1)',
-                  color: pingResult.ok ? '#1a7a35' : '#c0160c',
-                  border: `0.5px solid ${pingResult.ok ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-                }}>
+                  padding:'10px 14px', borderRadius:11, marginBottom:16, fontSize:12,
+                  fontWeight:500,
+                }} className={pingResult.ok ? 'ping-ok' : 'ping-err'}>
                   {pingResult.ok ? '✅' : '❌'} {pingResult.msg}
                 </div>
               )}
@@ -1014,68 +1294,75 @@ export default function AdminWablas() {
         {tab === 'trigger' && (
           <div className="section-enter" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             {[
-              {
-                cmd: 'reminder:harian',
-                icon: '🔔', title: 'Reminder Harian',
-                desc: 'Kirim reminder H-3 dan H-1 ke semua pasien yang jadwal kontrolnya sesuai target tanggal hari ini.',
-                color: '#007AFF', warn: false,
-              },
-              {
-                cmd: 'reminder:surkon',
-                icon: '📄', title: 'Reminder Surat Kontrol',
-                desc: 'Kirim notifikasi surat kontrol yang akan segera berakhir.',
-                color: '#FF9500', warn: false,
-              },
-              {
-                cmd: 'nps:kirim',
-                icon: '⭐', title: 'Kirim NPS',
-                desc: 'Kirim survei NPS ke semua pasien yang billing sudah closing hari ini (hanya sekali per kunjungan).',
-                color: '#AF52DE', warn: true,
-              },
-            ].map(item => (
-              <div key={item.cmd} className="aw-card hoverable" style={{ padding:22 }}>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:16 }}>
-                  <div style={{
-                    width:42, height:42, borderRadius:12,
-                    background: item.color + '15',
-                    display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0,
-                  }}>{item.icon}</div>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:600, color:'#1D1D1F', letterSpacing:'-0.2px' }}>{item.title}</div>
-                    <div style={{ fontSize:12, color:'rgba(60,60,67,0.5)', marginTop:3, lineHeight:1.5 }}>{item.desc}</div>
-                  </div>
-                </div>
-
-                {item.warn && (
-                  <div style={{
-                    padding:'8px 12px', borderRadius:9, marginBottom:12, fontSize:11,
-                    background:'rgba(255,149,0,0.1)', color:'#b25000',
-                    border:'0.5px solid rgba(255,149,0,0.25)',
-                  }}>
-                    ⚠️ Hati-hati: aksi ini mengirim WA ke pasien nyata
-                  </div>
-                )}
-
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <code style={{ fontSize:11, color:'rgba(60,60,67,0.45)', background:'rgba(0,0,0,0.05)', padding:'3px 8px', borderRadius:6 }}>
-                    php artisan {item.cmd}
-                  </code>
-                  <button
-                    className="aw-btn aw-btn-sm"
-                    style={{ background: item.color, color:'#fff' }}
-                    disabled={triggerLoading[item.cmd]}
-                    onClick={() => handleTrigger(item.cmd)}
-                  >
-                    {triggerLoading[item.cmd]
-                      ? <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
-                          <span style={{ width:11, height:11, border:'2px solid rgba(255,255,255,0.4)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.7s linear infinite', display:'inline-block' }} />
-                          Running…
-                        </span>
-                      : '▶ Jalankan'
-                    }
-                  </button>
-                </div>
+          { cmd: 'reminder:harian', icon: '🔔', title: 'Reminder Harian',
+            desc: 'Kirim reminder H-3 dan H-1 ke semua pasien yang jadwal kontrolnya sesuai target tanggal hari ini.',
+            color: '#007AFF', warn: false,
+          },
+          { cmd: 'reminder:surkon', icon: '📄', title: 'Reminder Surat Kontrol',
+            desc: 'Kirim notifikasi surat kontrol yang akan segera berakhir.',
+            color: '#FF9500', warn: false,
+          },
+          { cmd: 'nps:kirim', icon: '⭐', title: 'Kirim NPS',
+            desc: 'Kirim survei NPS ke semua pasien yang billing sudah closing hari ini (hanya sekali per kunjungan).',
+            color: '#AF52DE', warn: true,
+          },
+        ].map(item => (
+          <div
+            key={item.cmd}
+            className="aw-card trigger-card"
+            style={{ padding:24, '--glow-color': item.color + '33' }}
+          >
+            <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:18 }}>
+              <div
+                className="icon-orb"
+                style={{
+                  width:48, height:48, borderRadius:14,
+                  background: `linear-gradient(135deg, ${item.color}20, ${item.color}0d)`,
+                  fontSize:22, flexShrink:0,
+                  boxShadow: `0 2px 10px ${item.color}25`,
+                  '--orb-shadow': item.color + '45',
+                }}
+              >{item.icon}</div>
+              <div style={{ paddingTop:2 }}>
+                <div style={{ fontSize:15, fontWeight:600, color:'#1D1D1F', letterSpacing:'-0.2px' }}>{item.title}</div>
+                <div style={{ fontSize:12, color:'rgba(60,60,67,0.5)', marginTop:4, lineHeight:1.55 }}>{item.desc}</div>
               </div>
+            </div>
+
+            {item.warn && (
+              <div style={{
+                padding:'9px 13px', borderRadius:10, marginBottom:14, fontSize:11,
+                background:'rgba(255,149,0,0.1)', color:'#b25000',
+                border:'0.5px solid rgba(255,149,0,0.28)',
+              }}>
+                ⚠️ Hati-hati: aksi ini mengirim WA ke pasien nyata
+              </div>
+            )}
+
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <code style={{ fontSize:11, color:'rgba(60,60,67,0.4)', background:'rgba(0,0,0,0.05)', padding:'4px 9px', borderRadius:7 }}>
+                php artisan {item.cmd}
+              </code>
+              <button
+                className="aw-btn aw-btn-sm"
+                style={{
+                  background: `linear-gradient(135deg, ${item.color}ee, ${item.color})`,
+                  color:'#fff',
+                  boxShadow: `0 2px 8px ${item.color}40`,
+                }}
+                disabled={triggerLoading[item.cmd]}
+                onClick={() => handleTrigger(item.cmd)}
+              >
+                {triggerLoading[item.cmd]
+                  ? <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                      <span style={{ width:11, height:11, border:'2px solid rgba(255,255,255,0.4)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.7s linear infinite', display:'inline-block' }} />
+                      Running…
+                    </span>
+                  : '▶ Jalankan'
+                }
+              </button>
+            </div>
+          </div>
             ))}
           </div>
         )}

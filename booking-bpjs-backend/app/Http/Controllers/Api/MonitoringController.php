@@ -44,13 +44,13 @@ class MonitoringController extends Controller
 public function borDashboard(Request $request)
 {
     $tanggal = $request->get('tanggal', now()->format('Y-m-d'));
-    $bulan   = substr($tanggal, 0, 7);     // YYYY-MM
+    $bulan   = substr($tanggal, 0, 7);  // YYYY-MM
     $tahun   = substr($tanggal, 0, 4);
 
     try {
         $db = DB::connection('kamar');
 
-        // === Data BOR Real Time ===
+        // ── 1. BOR REAL TIME (snapshot dari SIK) ─────────────────────
         $totalPerKelas = $db->table('datkamar')
             ->join('ref_kamar', 'datkamar.kodekelas', '=', 'ref_kamar.kodekelas')
             ->select(
@@ -67,58 +67,152 @@ public function borDashboard(Request $request)
             ->groupBy('ref_kamar.kodekelas')
             ->get();
 
-        $data = [];
-        $grandTotalTT = 0;
-        $grandTotalTerisi = 0;
+        $dataRealtime  = [];
+        $grandTotalTT  = 0;
+        $grandTerisi   = 0;
 
         foreach ($totalPerKelas as $kelas) {
             $tersedia = $tersediaPerKelas->firstWhere('kodekelas', $kelas->kodekelas)->total_tersedia ?? 0;
-            $terisi = $kelas->total_tt - $tersedia;
-            $bor = $kelas->total_tt > 0 ? round(($terisi / $kelas->total_tt) * 100, 2) : 0;
+            $terisi   = $kelas->total_tt - $tersedia;
+            $bor      = $kelas->total_tt > 0 ? round(($terisi / $kelas->total_tt) * 100, 2) : 0;
 
-            $data[] = [
+            $dataRealtime[] = [
                 'kodekelas' => $kelas->kodekelas,
                 'namakelas' => $kelas->namakelas,
-                'total_tt'  => (int)$kelas->total_tt,
-                'terisi'    => (int)$terisi,
-                'tersedia'  => (int)$tersedia,
+                'total_tt'  => (int) $kelas->total_tt,
+                'terisi'    => (int) $terisi,
+                'tersedia'  => (int) $tersedia,
                 'bor'       => $bor,
             ];
 
             $grandTotalTT += $kelas->total_tt;
-            $grandTotalTerisi += $terisi;
+            $grandTerisi  += $terisi;
         }
 
-        $borRealisasi = $grandTotalTT > 0 ? round(($grandTotalTerisi / $grandTotalTT) * 100, 2) : 0;
+        $borRealtimePersen = $grandTotalTT > 0
+            ? round(($grandTerisi / $grandTotalTT) * 100, 2)
+            : 0;
 
-        // === Target BOR (Hardcode) ===
+        // ── 2. BOR BULANAN (dari kamar_inap Khanza) ──────────────────
+        // Rumus Kemenkes:
+        // BOR = (Σ hari perawatan dalam bulan) / (Total TT × hari dalam bulan) × 100
+        // Target user: 25 hari per TT per bulan
+        //   → target BOR = 25 / hari_dalam_bulan × 100
+
+        $hariDalamBulan = (int) now()->parse($bulan . '-01')->daysInMonth;
+
+        // Total TT aktif (pakai data SIK, sudah dihitung di atas)
+        $totalTT = $grandTotalTT ?: 1; // hindari div/0
+
+        // Hari perawatan bulan ini dari kamar_inap:
+        // Pasien yang masuk ATAU masih dirawat dalam bulan berjalan
+        $hariPerawatanBulanan = DB::select("
+            SELECT COALESCE(SUM(
+                DATEDIFF(
+                    LEAST(COALESCE(tgl_keluar, CURDATE()), LAST_DAY(:bln_end)),
+                    GREATEST(tgl_masuk, :bln_start)
+                ) + 1
+            ), 0) as total_hari
+            FROM kamar_inap
+            WHERE stts_pulang != 'Pindah Kamar'
+              AND tgl_masuk <= LAST_DAY(:bln_end2)
+              AND (tgl_keluar IS NULL OR tgl_keluar >= :bln_start2)
+        ", [
+            'bln_end'    => $bulan . '-01',
+            'bln_start'  => $bulan . '-01',
+            'bln_end2'   => $bulan . '-01',
+            'bln_start2' => $bulan . '-01',
+        ]);
+
+        $totalHariPerawatan = (int) ($hariPerawatanBulanan[0]->total_hari ?? 0);
+        $penyebutBulanan    = $totalTT * $hariDalamBulan;
+        $borBulananPersen   = $penyebutBulanan > 0
+            ? round(($totalHariPerawatan / $penyebutBulanan) * 100, 2)
+            : 0;
+
+        // Target 25 hari per TT per bulan
+        $targetHariPerTT     = 25;
+        $targetBorBulanan    = round(($targetHariPerTT / $hariDalamBulan) * 100, 2);
+        $targetHariTotal     = $targetHariPerTT * $totalTT;
+
+        // BOR per kelas (bulanan) — breakdown dari kamar_inap join kamar
+        $borPerKelasBulanan = DB::select("
+            SELECT
+                k.kelas,
+                COUNT(DISTINCT k.kd_kamar)                          as total_tt,
+                COALESCE(SUM(
+                    DATEDIFF(
+                        LEAST(COALESCE(ki.tgl_keluar, CURDATE()), LAST_DAY(:bln1)),
+                        GREATEST(ki.tgl_masuk, :bln2)
+                    ) + 1
+                ), 0)                                                as total_hari,
+                :hari_bulan                                          as hari_dalam_bulan
+            FROM kamar k
+            LEFT JOIN kamar_inap ki
+                ON ki.kd_kamar = k.kd_kamar
+                AND ki.stts_pulang != 'Pindah Kamar'
+                AND ki.tgl_masuk  <= LAST_DAY(:bln3)
+                AND (ki.tgl_keluar IS NULL OR ki.tgl_keluar >= :bln4)
+            WHERE k.statusdata = '1'
+            GROUP BY k.kelas
+            ORDER BY k.kelas
+        ", [
+            'bln1'       => $bulan . '-01',
+            'bln2'       => $bulan . '-01',
+            'bln3'       => $bulan . '-01',
+            'bln4'       => $bulan . '-01',
+            'hari_bulan' => $hariDalamBulan,
+        ]);
+
+        $borKelasBulanan = collect($borPerKelasBulanan)->map(function ($row) use ($hariDalamBulan, $targetHariPerTT) {
+            $penyebut  = $row->total_tt * $hariDalamBulan;
+            $bor       = $penyebut > 0 ? round(($row->total_hari / $penyebut) * 100, 2) : 0;
+            $targetBor = round(($targetHariPerTT / $hariDalamBulan) * 100, 2);
+            return [
+                'kelas'           => $row->kelas,
+                'total_tt'        => (int) $row->total_tt,
+                'total_hari'      => (int) $row->total_hari,
+                'bor'             => $bor,
+                'target_bor'      => $targetBor,
+                'target_hari'     => $targetHariPerTT * (int) $row->total_tt,
+                'selisih_hari'    => (int) $row->total_hari - ($targetHariPerTT * (int) $row->total_tt),
+                'status'          => $bor >= $targetBor ? 'tercapai' : 'belum',
+            ];
+        });
+
+        // ── 3. Targets summary ────────────────────────────────────────
         $targets = [
             'harian' => [
-                'target' => 78.0,
-                'realisasi' => $borRealisasi,
-                'selisih' => round($borRealisasi - 78.0, 2)
+                'label'      => 'Real Time',
+                'target'     => 78.0,
+                'realisasi'  => $borRealtimePersen,
+                'selisih'    => round($borRealtimePersen - 78.0, 2),
             ],
             'bulanan' => [
-                'target' => 75.0,
-                'realisasi' => $borRealisasi,   // nanti bisa dihitung rata-rata bulanan
-                'selisih' => round($borRealisasi - 75.0, 2)
+                'label'           => 'Bulan ' . \Carbon\Carbon::parse($bulan . '-01')->locale('id')->isoFormat('MMMM YYYY'),
+                'target_persen'   => $targetBorBulanan,
+                'target_hari_per_tt' => $targetHariPerTT,
+                'target_hari_total'  => $targetHariTotal,
+                'realisasi_persen'   => $borBulananPersen,
+                'realisasi_hari'     => $totalHariPerawatan,
+                'selisih_persen'     => round($borBulananPersen - $targetBorBulanan, 2),
+                'selisih_hari'       => $totalHariPerawatan - $targetHariTotal,
+                'hari_dalam_bulan'   => $hariDalamBulan,
+                'status'             => $borBulananPersen >= $targetBorBulanan ? 'tercapai' : 'belum',
             ],
-            'tahunan' => [
-                'target' => 72.0,
-                'realisasi' => $borRealisasi,   // nanti bisa dihitung rata-rata tahunan
-                'selisih' => round($borRealisasi - 72.0, 2)
-            ]
         ];
 
         return response()->json([
-            'success'            => true,
-            'tanggal'            => $tanggal,
-            'total_tempat_tidur' => $grandTotalTT,
-            'total_terisi'       => $grandTotalTerisi,
-            'total_tersedia'     => $grandTotalTT - $grandTotalTerisi,
-            'bor_harian'         => $data,
-            'bor_realisasi'      => $borRealisasi,
-            'targets'            => $targets
+            'success'              => true,
+            'tanggal'              => $tanggal,
+            'bulan'                => $bulan,
+            'total_tempat_tidur'   => $grandTotalTT,
+            'total_terisi'         => $grandTerisi,
+            'total_tersedia'       => $grandTotalTT - $grandTerisi,
+            'bor_realtime'         => $dataRealtime,
+            'bor_realisasi'        => $borRealtimePersen,
+            'bor_bulanan_per_kelas'=> $borKelasBulanan,
+            'targets'              => $targets,
         ]);
 
     } catch (\Exception $e) {
@@ -435,7 +529,7 @@ public function borDashboard(Request $request)
                     DB::raw("DATE(bsk.tgl_rencana) as tgl_rencana"),
                     'bs.no_sep',
                     DB::raw("DATE(bs.tglsep) as tgl_sep"),
-                    DB::raw("DATEDIFF(DATE(bs.tglsep), DATE(bsk.tgl_surat)) as selisih_hari"),
+                    DB::raw("DATEDIFF(DATE(bsk.tgl_rencana), DATE(bs.tglsep)) as selisih_hari"),
                     'bsk.nm_poli_bpjs as poli',
                     'bsk.nm_dokter_bpjs as dokter'
                 )
