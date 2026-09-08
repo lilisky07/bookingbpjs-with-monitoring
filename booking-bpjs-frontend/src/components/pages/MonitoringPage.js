@@ -1373,6 +1373,20 @@ function MonitoringPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
                   className="apple-input" style={{ fontSize: 12.5 }} />
+                <a href="/antrolpertanggal" style={{
+                  padding: '7px 14px', borderRadius: 10,
+                  background: 'rgba(120,120,128,0.13)', color: '#1D1D1F',
+                  fontSize: 12.5, fontWeight: 600, textDecoration: 'none',
+                  letterSpacing: '-0.1px', border: '0.5px solid rgba(0,0,0,0.09)',
+                  transition: 'transform 0.14s cubic-bezier(0.34,1.56,0.64,1)',
+                  display: 'inline-block',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform='scale(1.04)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; }}
+                  onMouseDown={e  => { e.currentTarget.style.transform='scale(0.96)'; }}
+                  onMouseUp={e    => { e.currentTarget.style.transform='scale(1.04)'; }}>
+                  ⏱ Analisis task id
+                </a>
                 <a href="/bookingbpjs" style={{
                   padding: '7px 14px', borderRadius: 10,
                   background: 'linear-gradient(135deg, #007AFF, #0063CC)',

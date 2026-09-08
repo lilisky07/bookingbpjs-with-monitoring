@@ -959,18 +959,22 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
                 foreach ($perPasien as $noRawat => $tasks) {
                     if (isset($tasks[$a], $tasks[$b]) && $tasks[$b] >= $tasks[$a]) {
                         $durasiList[] = [
-                            'no_rawat' => $noRawat,
-                            'detik'    => $tasks[$b] - $tasks[$a], // presisi penuh, integer detik
+                            'no_rawat'    => $noRawat,
+                            'detik'       => $tasks[$b] - $tasks[$a], // presisi penuh, integer detik
+                            'waktu_awal'  => date('Y-m-d H:i:s', $tasks[$a]),
+                            'waktu_akhir' => date('Y-m-d H:i:s', $tasks[$b]),
                         ];
                     }
                 }
 
                 if (count($durasiList) === 0) {
                     $hasil[$label] = [
-                        'jumlah_sampel'   => 0,
-                        'rata_rata_detik' => 0,
-                        'terlama_detik'   => 0,
-                        'terlama_no_rawat'=> null,
+                        'jumlah_sampel'    => 0,
+                        'rata_rata_detik'  => 0,
+                        'terlama_detik'    => 0,
+                        'terlama_no_rawat' => null,
+                        'terlama_waktu_awal'  => null,
+                        'terlama_waktu_akhir' => null,
                     ];
                     continue;
                 }
@@ -981,6 +985,8 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
                     'rata_rata_detik'  => (int) round(collect($durasiList)->avg('detik')),
                     'terlama_detik'    => $terlama['detik'],
                     'terlama_no_rawat' => $terlama['no_rawat'],
+                    'terlama_waktu_awal'  => $terlama['waktu_awal'],
+                    'terlama_waktu_akhir' => $terlama['waktu_akhir'],
                 ];
             }
 
@@ -988,15 +994,33 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
             $tungguPoli = [];
             foreach ($perPasien as $noRawat => $tasks) {
                 if (isset($tasks[2], $tasks[4]) && $tasks[4] >= $tasks[2]) {
-                    $tungguPoli[] = $tasks[4] - $tasks[2]; // detik
+                    $tungguPoli[] = [
+                        'no_rawat'    => $noRawat,
+                        'detik'       => $tasks[4] - $tasks[2],
+                        'waktu_awal'  => date('Y-m-d H:i:s', $tasks[2]),
+                        'waktu_akhir' => date('Y-m-d H:i:s', $tasks[4]),
+                    ];
                 }
             }
 
-            $waktuTungguPoli = [
-                'jumlah_sampel'   => count($tungguPoli),
-                'rata_rata_detik' => count($tungguPoli) ? (int) round(array_sum($tungguPoli) / count($tungguPoli)) : 0,
-                'terlama_detik'   => count($tungguPoli) ? max($tungguPoli) : 0,
-            ];
+            if (count($tungguPoli) === 0) {
+                $waktuTungguPoli = [
+                    'jumlah_sampel'   => 0,
+                    'rata_rata_detik' => 0,
+                    'terlama_detik'   => 0,
+                    'terlama_waktu_awal'  => null,
+                    'terlama_waktu_akhir' => null,
+                ];
+            } else {
+                $terlamaTunggu = collect($tungguPoli)->sortByDesc('detik')->first();
+                $waktuTungguPoli = [
+                    'jumlah_sampel'   => count($tungguPoli),
+                    'rata_rata_detik' => (int) round(collect($tungguPoli)->avg('detik')),
+                    'terlama_detik'   => $terlamaTunggu['detik'],
+                    'terlama_waktu_awal'  => $terlamaTunggu['waktu_awal'],
+                    'terlama_waktu_akhir' => $terlamaTunggu['waktu_akhir'],
+                ];
+            }
 
             return response()->json([
                 'success'          => true,
@@ -1013,8 +1037,10 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
 
     // ═══════════════════════════════════════════════════════════════
     // KETEPATAN WAKTU DOKTER
-    // Realisasi = waktu task_id 4 (dilayani) pertama pada hari itu per dokter
-    // Sesuai = selisih <= 45 menit sebelum/sesudah jam_mulai jadwal
+    // Base data = JADWAL dokter (siapa yang seharusnya praktek di hari itu),
+    // supaya dokter yang belum ada realisasi tetap muncul (bukan hilang diam-diam).
+    // Realisasi = waktu task_id 4 (dilayani) pertama pada hari itu per dokter.
+    // Sesuai = selisih <= 45 menit sebelum/sesudah jam_mulai jadwal.
     // Filter: ?tanggal=YYYY-MM-DD  ATAU  ?bulan=YYYY-MM
     // ═══════════════════════════════════════════════════════════════
     public function ketepatanDokter(Request $request): JsonResponse
@@ -1024,88 +1050,132 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
             $bulan   = $request->get('bulan');
             $hariArr = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
 
-            // Realisasi mulai praktek per dokter per tanggal:
-            // waktu task_id=4 paling awal pada hari tsb, untuk pasien dokter itu
-            $realisasiQuery = DB::table('referensi_mobilejkn_bpjs_taskid as t')
+            // Tentukan rentang tanggal yang mau dievaluasi
+            if ($tanggal) {
+                $tglMulai = $tglAkhir = $tanggal;
+            } elseif ($bulan) {
+                $tglMulai = $bulan . '-01';
+                $tglAkhir = date('Y-m-t', strtotime($tglMulai));
+            } else {
+                $tglMulai = $tglAkhir = now()->format('Y-m-d');
+            }
+
+            // Mapping BPJS <-> internal
+            $mapDokterInternal = DB::table('maping_dokter_dpjpvclaim')
+                ->pluck('kd_dokter', 'kd_dokter_bpjs'); // [kd_dokter_bpjs => kd_dokter]
+            $mapPoliInternal = DB::table('maping_poli_bpjs')
+                ->pluck('kd_poli_rs', 'kd_poli_bpjs'); // [kd_poli_bpjs => kd_poli_rs]
+
+            // BASE DATA: semua kombinasi dokter+poli+tanggal yang BENAR-BENAR ada
+            // booking-nya di referensi_mobilejkn_bpjs (bukan dari jadwal), supaya
+            // dokter yang tidak lewat alur BPJS Mobile JKN otomatis tidak muncul,
+            // dan dokter yang ada booking tapi belum sampai task_id 4 tetap kelihatan.
+            $baseQuery = DB::table('referensi_mobilejkn_bpjs')
+                ->select('kodedokter', 'kodepoli', DB::raw('DATE(tanggalperiksa) as tgl'))
+                ->whereBetween(DB::raw('DATE(tanggalperiksa)'), [$tglMulai, $tglAkhir])
+                ->distinct()
+                ->get();
+
+            // Realisasi (task_id=4 tercepat) untuk rentang tanggal yang sama,
+            // di-index by "kodedokter|kodepoli|tanggal" biar lookup O(1)
+            $realisasiRows = DB::table('referensi_mobilejkn_bpjs_taskid as t')
                 ->join('referensi_mobilejkn_bpjs as rmb', 'rmb.no_rawat', '=', 't.no_rawat')
                 ->where('t.taskid', 4)
+                ->whereBetween(DB::raw('DATE(rmb.tanggalperiksa)'), [$tglMulai, $tglAkhir])
                 ->select(
-                    'rmb.kodedokter',
-                    'rmb.kodepoli',
+                    'rmb.kodedokter', 'rmb.kodepoli',
                     DB::raw('DATE(rmb.tanggalperiksa) as tgl'),
                     DB::raw('MIN(t.waktu) as realisasi_mulai')
                 )
-                ->groupBy('rmb.kodedokter', 'rmb.kodepoli', DB::raw('DATE(rmb.tanggalperiksa)'));
+                ->groupBy('rmb.kodedokter', 'rmb.kodepoli', DB::raw('DATE(rmb.tanggalperiksa)'))
+                ->get();
 
-            if ($tanggal) {
-                $realisasiQuery->whereDate('rmb.tanggalperiksa', $tanggal);
-            } elseif ($bulan) {
-                $realisasiQuery->whereRaw("DATE_FORMAT(rmb.tanggalperiksa, '%Y-%m') = ?", [$bulan]);
-            } else {
-                $realisasiQuery->whereDate('rmb.tanggalperiksa', now()->format('Y-m-d'));
+            $realisasiIndex = [];
+            foreach ($realisasiRows as $r) {
+                $key = $r->kodedokter . '|' . $r->kodepoli . '|' . $r->tgl;
+                $realisasiIndex[$key] = $r->realisasi_mulai;
             }
 
-            $realisasiRows = $realisasiQuery->get();
+            $namaDokterCache = [];
+            $jadwalCache = []; // "kd_dokter|kd_poli|hari" => jadwal row atau false (sudah dicek, tidak ada)
+            $rekap = []; // kodedokter (BPJS) => rekap
 
-            // Ambil mapping kode dokter BPJS -> kode dokter internal SIMRS, dan
-            // kode poli BPJS -> kode poli internal SIMRS (referensi_mobilejkn_bpjs
-            // pakai kode versi BPJS, sedangkan jadwal & dokter pakai kode internal)
-            $mapDokter = DB::table('maping_dokter_dpjpvclaim')
-                ->pluck('kd_dokter', 'kd_dokter_bpjs'); // [kd_dokter_bpjs => kd_dokter]
+            foreach ($baseQuery as $row) {
+                $kdDokterBpjs = $row->kodedokter;
+                $kdPoliBpjs   = $row->kodepoli;
+                $tgl          = $row->tgl;
 
-            $mapPoli = DB::table('maping_poli_bpjs')
-                ->pluck('kd_poli_rs', 'kd_poli_bpjs'); // [kd_poli_bpjs => kd_poli_rs]
-
-            $rekap = []; // kd_dokter (internal) => ['nama'=>, 'jumlah_praktek'=>, 'sesuai'=>, 'tidak_sesuai'=>]
-
-            foreach ($realisasiRows as $row) {
-                $kdDokterInternal = $mapDokter[$row->kodedokter] ?? null;
-                $kdPoliInternal   = $mapPoli[$row->kodepoli] ?? null;
-
-                if (!$kdDokterInternal || !$kdPoliInternal) {
-                    continue; // tidak ada mapping dokter/poli ke kode internal -> tidak bisa dicocokkan ke jadwal
-                }
-
-                $namaHari = $hariArr[(int) date('w', strtotime($row->tgl))];
-
-                $jadwal = DB::table('jadwal')
-                    ->where('kd_dokter', $kdDokterInternal)
-                    ->where('kd_poli', $kdPoliInternal)
-                    ->where('hari_kerja', $namaHari)
-                    ->first();
-
-                if (!$jadwal) {
-                    continue; // tidak ada jadwal resmi hari itu -> lewati, tidak bisa dinilai
-                }
-
-                $jamMulaiJadwal = strtotime($row->tgl . ' ' . $jadwal->jam_mulai);
-                $jamRealisasi   = strtotime($row->realisasi_mulai);
-                $selisihMenit   = abs($jamRealisasi - $jamMulaiJadwal) / 60;
-                $sesuai         = $selisihMenit <= 45;
-
-                if (!isset($rekap[$kdDokterInternal])) {
-                    $nmDokter = DB::table('dokter')->where('kd_dokter', $kdDokterInternal)->value('nm_dokter');
-                    $rekap[$kdDokterInternal] = [
-                        'kd_dokter'      => $kdDokterInternal,
-                        'nama_dokter'    => $nmDokter ?? $kdDokterInternal,
-                        'jumlah_praktek' => 0,
-                        'jumlah_sesuai'  => 0,
-                        'jumlah_tidak_sesuai' => 0,
+                if (!isset($rekap[$kdDokterBpjs])) {
+                    if (!isset($namaDokterCache[$kdDokterBpjs])) {
+                        $kdInternal = $mapDokterInternal[$kdDokterBpjs] ?? null;
+                        $namaDokterCache[$kdDokterBpjs] = $kdInternal
+                            ? (DB::table('dokter')->where('kd_dokter', $kdInternal)->value('nm_dokter') ?? $kdInternal)
+                            : $kdDokterBpjs;
+                    }
+                    $rekap[$kdDokterBpjs] = [
+                        'kd_dokter'             => $kdDokterBpjs,
+                        'nama_dokter'           => $namaDokterCache[$kdDokterBpjs],
+                        'jumlah_jadwal'         => 0,
+                        'jumlah_praktek'        => 0,
+                        'jumlah_sesuai'         => 0,
+                        'jumlah_tidak_sesuai'   => 0,
+                        'jumlah_belum_ada_data' => 0,
                     ];
                 }
 
-                $rekap[$kdDokterInternal]['jumlah_praktek']++;
+                $rekap[$kdDokterBpjs]['jumlah_jadwal']++;
+
+                $realisasi = $realisasiIndex[$kdDokterBpjs . '|' . $kdPoliBpjs . '|' . $tgl] ?? null;
+
+                if (!$realisasi) {
+                    $rekap[$kdDokterBpjs]['jumlah_belum_ada_data']++;
+                    continue;
+                }
+
+                // Cari jadwal resmi (jam_mulai) buat pembanding ketepatan
+                $kdDokterInternal = $mapDokterInternal[$kdDokterBpjs] ?? null;
+                $kdPoliInternal   = $mapPoliInternal[$kdPoliBpjs] ?? null;
+                $namaHari         = $hariArr[(int) date('w', strtotime($tgl))];
+                $cacheKey         = $kdDokterInternal . '|' . $kdPoliInternal . '|' . $namaHari;
+
+                if (!array_key_exists($cacheKey, $jadwalCache)) {
+                    $jadwalCache[$cacheKey] = ($kdDokterInternal && $kdPoliInternal)
+                        ? DB::table('jadwal')
+                            ->where('kd_dokter', $kdDokterInternal)
+                            ->where('kd_poli', $kdPoliInternal)
+                            ->where('hari_kerja', $namaHari)
+                            ->first()
+                        : null;
+                }
+                $jadwal = $jadwalCache[$cacheKey];
+
+                if (!$jadwal) {
+                    // Ada realisasi tapi tidak ada jadwal resmi buat pembanding
+                    // -> tetap dihitung sebagai "praktek", tapi tidak bisa dinilai sesuai/tidak
+                    $rekap[$kdDokterBpjs]['jumlah_belum_ada_data']++;
+                    continue;
+                }
+
+                $jamMulaiJadwal = strtotime($tgl . ' ' . $jadwal->jam_mulai);
+                $jamRealisasi   = strtotime($realisasi);
+                $selisihMenit   = abs($jamRealisasi - $jamMulaiJadwal) / 60;
+                $sesuai         = $selisihMenit <= 45;
+
+                $rekap[$kdDokterBpjs]['jumlah_praktek']++;
                 if ($sesuai) {
-                    $rekap[$kdDokterInternal]['jumlah_sesuai']++;
+                    $rekap[$kdDokterBpjs]['jumlah_sesuai']++;
                 } else {
-                    $rekap[$kdDokterInternal]['jumlah_tidak_sesuai']++;
+                    $rekap[$kdDokterBpjs]['jumlah_tidak_sesuai']++;
                 }
             }
+
+            // Urutkan berdasarkan jumlah_jadwal terbanyak biar dokter paling aktif di atas
+            $hasil = collect(array_values($rekap))->sortByDesc('jumlah_jadwal')->values()->all();
 
             return response()->json([
                 'success' => true,
                 'filter'  => $tanggal ? "tanggal: $tanggal" : ($bulan ? "bulan: $bulan" : 'default: hari ini'),
-                'data'    => array_values($rekap),
+                'data'    => $hasil,
             ]);
         } catch (\Exception $e) {
             Log::error('Monitoring ketepatanDokter error', ['msg' => $e->getMessage()]);

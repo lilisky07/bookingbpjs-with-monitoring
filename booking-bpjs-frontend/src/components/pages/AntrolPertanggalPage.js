@@ -82,9 +82,14 @@ const fmtDetik = (totalDetik) => {
   const jam   = Math.floor(abs / 3600);
   const menit = Math.floor((abs % 3600) / 60);
   const detik = abs % 60;
-  if (jam > 0)   return `${sign}${jam}j ${menit}m ${detik}d`;
-  if (menit > 0) return `${sign}${menit}m ${detik}d`;
-  return `${sign}${detik}d`;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${sign}${pad(jam)}:${pad(menit)}:${pad(detik)}`;
+};
+const fmtJamSaja = (waktuStr) => {
+  if (!waktuStr) return '—';
+  // waktuStr format 'YYYY-MM-DD HH:MM:SS' -> ambil jam:menit:detik saja
+  const parts = waktuStr.split(' ');
+  return parts.length > 1 ? parts[1] : waktuStr;
 };
 
 const LoadingState = () => (
@@ -189,15 +194,18 @@ const TaskIdDurasiSection = ({ params }) => {
 
           <TableWrap>
             <thead>
-              <tr><TH>Tahap</TH><TH>Jumlah Sampel</TH><TH>Rata-rata</TH><TH>Terlama</TH><TH>No Rawat Terlama</TH></tr>
+              <tr><TH>Tahap</TH><TH>Jumlah Sampel</TH><TH>Rata-rata (jj:mm:dd)</TH><TH>Terlama (jj:mm:dd)</TH><TH>Rentang Waktu Terlama</TH><TH>No Rawat</TH></tr>
             </thead>
             <tbody>
               {Object.entries(perTahap).map(([key, v], i) => (
                 <tr key={key} className="apple-table-row" style={{ animationDelay: `${i * 0.03}s` }}>
                   <TD style={{ fontWeight: 600 }}>{TASK_STAGE_LABELS[key] || key}</TD>
                   <TD>{fmt(v.jumlah_sampel)}</TD>
-                  <TD style={{ fontWeight: 600, color: '#007AFF' }}>{fmtDetik(v.rata_rata_detik)}</TD>
-                  <TD style={{ fontWeight: 600, color: v.terlama_detik > 3600 ? '#FF3B30' : '#1D1D1F' }}>{fmtDetik(v.terlama_detik)}</TD>
+                  <TD style={{ fontWeight: 600, color: '#007AFF', fontFamily: 'ui-monospace, monospace' }}>{fmtDetik(v.rata_rata_detik)}</TD>
+                  <TD style={{ fontWeight: 600, color: v.terlama_detik > 3600 ? '#FF3B30' : '#1D1D1F', fontFamily: 'ui-monospace, monospace' }}>{fmtDetik(v.terlama_detik)}</TD>
+                  <TD style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11.5, color: '#6E6E73' }}>
+                    {v.terlama_waktu_awal ? `${fmtJamSaja(v.terlama_waktu_awal)} - ${fmtJamSaja(v.terlama_waktu_akhir)}` : '—'}
+                  </TD>
                   <TD style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{fmt(v.terlama_no_rawat)}</TD>
                 </tr>
               ))}
@@ -210,7 +218,13 @@ const TaskIdDurasiSection = ({ params }) => {
               <div className="stat-grid">
                 <StatCard label="Jumlah Sampel" value={fmt(tungguPoli.jumlah_sampel)} icon="👥" color="#6E3AED" />
                 <StatCard label="Rata-rata Tunggu" value={fmtDetik(tungguPoli.rata_rata_detik)} icon="⏳" color="#007AFF" />
-                <StatCard label="Terlama" value={fmtDetik(tungguPoli.terlama_detik)} icon="⚠" color="#FF3B30" />
+                <StatCard
+                  label="Terlama"
+                  value={fmtDetik(tungguPoli.terlama_detik)}
+                  icon="⚠"
+                  color="#FF3B30"
+                  sub={tungguPoli.terlama_waktu_awal ? `${fmtJamSaja(tungguPoli.terlama_waktu_awal)} - ${fmtJamSaja(tungguPoli.terlama_waktu_akhir)}` : undefined}
+                />
               </div>
             </div>
           )}
@@ -235,40 +249,49 @@ const KetepatanDokterSection = ({ params }) => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const totalJadwal = data.reduce((s, d) => s + d.jumlah_jadwal, 0);
   const totalPraktek = data.reduce((s, d) => s + d.jumlah_praktek, 0);
   const totalSesuai  = data.reduce((s, d) => s + d.jumlah_sesuai, 0);
   const totalTidak   = data.reduce((s, d) => s + d.jumlah_tidak_sesuai, 0);
+  const totalBelumAdaData = data.reduce((s, d) => s + (d.jumlah_belum_ada_data || 0), 0);
 
   return (
     <div>
       <SectionTitle icon="👨‍⚕️">Ketepatan Waktu Dokter</SectionTitle>
       {loading ? <LoadingState /> : (
         <div style={{ animation: 'scaleIn 0.22s cubic-bezier(0.34,1.56,0.64,1)' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+            <span className="pill" style={{ background: 'rgba(0,0,0,0.06)', color: '#6E6E73' }}>Total Booking Dokter: {fmt(totalJadwal)}</span>
+          </div>
           <div className="stat-grid">
-            <StatCard label="Total Praktek" value={totalPraktek} icon="🩺" color="#007AFF" />
-            <StatCard label="Sesuai Jadwal" value={totalSesuai} icon="✓" color="#34C759" sub={totalPraktek ? `${Math.round(totalSesuai / totalPraktek * 100)}%` : '—'} />
-            <StatCard label="Tidak Sesuai" value={totalTidak} icon="⚠" color="#FF3B30" sub={totalPraktek ? `${Math.round(totalTidak / totalPraktek * 100)}%` : '—'} />
+            <StatCard label="Sesuai Jadwal" value={totalSesuai} icon="✓" color="#34C759" sub={totalPraktek ? `${Math.round(totalSesuai / totalPraktek * 100)}% dari yg ada data` : '—'} />
+            <StatCard label="Tidak Sesuai" value={totalTidak} icon="⚠" color="#FF3B30" sub={totalPraktek ? `${Math.round(totalTidak / totalPraktek * 100)}% dari yg ada data` : '—'} />
+            <StatCard label="Belum Ada Data" value={totalBelumAdaData} icon="❔" color="#8E8E93" sub="ada booking, belum bisa dinilai" />
           </div>
 
           <TableWrap>
             <thead>
-              <tr><TH>Dokter</TH><TH>Jumlah Praktek</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>% Sesuai</TH></tr>
+              <tr><TH>Dokter</TH><TH>Jml Booking</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>Belum Ada Data</TH><TH>% Sesuai</TH></tr>
             </thead>
             <tbody>
               {data.length === 0
-                ? <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: '#8E8E93', fontSize: 13 }}>Tidak ada data — coba ubah filter</td></tr>
+                ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#8E8E93', fontSize: 13 }}>Tidak ada data — coba ubah filter</td></tr>
                 : data.map((row, i) => {
-                  const persen = row.jumlah_praktek ? Math.round(row.jumlah_sesuai / row.jumlah_praktek * 100) : 0;
+                  const persen = row.jumlah_praktek ? Math.round(row.jumlah_sesuai / row.jumlah_praktek * 100) : null;
                   return (
                     <tr key={row.kd_dokter} className="apple-table-row" style={{ animationDelay: `${i * 0.025}s` }}>
                       <TD style={{ fontWeight: 600 }}>{fmt(row.nama_dokter)}</TD>
-                      <TD>{fmt(row.jumlah_praktek)}</TD>
+                      <TD>{fmt(row.jumlah_jadwal)}</TD>
                       <TD style={{ color: '#1D7A3A', fontWeight: 600 }}>{fmt(row.jumlah_sesuai)}</TD>
                       <TD style={{ color: '#C0392B', fontWeight: 600 }}>{fmt(row.jumlah_tidak_sesuai)}</TD>
+                      <TD style={{ color: '#8E8E93' }}>{fmt(row.jumlah_belum_ada_data)}</TD>
                       <TD>
-                        <span className="pill" style={{ background: persen >= 80 ? 'rgba(52,199,89,0.12)' : persen >= 50 ? 'rgba(255,204,0,0.15)' : 'rgba(255,59,48,0.10)', color: persen >= 80 ? '#1D7A3A' : persen >= 50 ? '#B8860B' : '#C0392B' }}>
-                          {persen}%
-                        </span>
+                        {persen === null
+                          ? <span className="pill" style={{ background: 'rgba(0,0,0,0.05)', color: '#8E8E93' }}>—</span>
+                          : <span className="pill" style={{ background: persen >= 80 ? 'rgba(52,199,89,0.12)' : persen >= 50 ? 'rgba(255,204,0,0.15)' : 'rgba(255,59,48,0.10)', color: persen >= 80 ? '#1D7A3A' : persen >= 50 ? '#B8860B' : '#C0392B' }}>
+                              {persen}%
+                            </span>
+                        }
                       </TD>
                     </tr>
                   );
