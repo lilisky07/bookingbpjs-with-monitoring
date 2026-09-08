@@ -271,7 +271,7 @@ const KetepatanDokterSection = ({ params }) => {
 
           <TableWrap>
             <thead>
-              <tr><TH>Dokter</TH><TH>Jml Booking</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>Belum Ada Data</TH><TH>% Sesuai</TH></tr>
+              <tr><TH>Dokter</TH><TH>Jumlah Praktek</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>Belum Ada Data</TH><TH>% Sesuai</TH></tr>
             </thead>
             <tbody>
               {data.length === 0
