@@ -44,6 +44,8 @@ use App\Http\Controllers\Api\NpsLaporanController; // namespace sesuai file: App
         Route::get('/bor', [MonitoringController::class, 'borDashboard']);
         Route::post('/sync-taskid', [MonitoringController::class, 'syncTaskId']);
         Route::get('/taskid/{nobooking}', [MonitoringController::class, 'getTaskId']);
+        Route::get('/taskid-durasi', [MonitoringController::class, 'taskIdDurasi']);
+        Route::get('/ketepatan-dokter', [MonitoringController::class, 'ketepatanDokter']);
         Route::get('/test-bpjs', function() {
     $service = new \App\Services\BpjsAntreanService();
     $result = $service->getAntreanByTanggal('2026-05-07');
