@@ -136,7 +136,7 @@ const TASK_STAGE_LABELS = {
 };
 
 /* ─── FILTER BAR (tanggal / bulan toggle) ────────────────────────── */
-const FilterBar = ({ mode, setMode, tanggal, setTanggal, bulan, setBulan, onRefresh, loading }) => (
+const FilterBar = ({ mode, setMode, bulan, setBulan, tanggalAwal, setTanggalAwal, tanggalAkhir, setTanggalAkhir, onRefresh, loading }) => (
   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 18, padding: '14px 16px', background: 'rgba(0,0,0,0.022)', borderRadius: 14, border: '0.5px solid rgba(0,0,0,0.06)' }}>
     <div>
       <div style={{ fontSize: 11, color: '#6E6E73', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Filter</div>
@@ -145,12 +145,19 @@ const FilterBar = ({ mode, setMode, tanggal, setTanggal, bulan, setBulan, onRefr
         <option value="bulan">Per Bulan</option>
       </select>
     </div>
-    {mode === 'tanggal' ? (
-      <div>
-        <div style={{ fontSize: 11, color: '#6E6E73', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Tanggal</div>
-        <input type="date" className="apple-input" value={tanggal} onChange={e => setTanggal(e.target.value)} />
-      </div>
-    ) : (
+    {mode === 'tanggal' && (
+      <>
+        <div>
+          <div style={{ fontSize: 11, color: '#6E6E73', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Dari Tanggal</div>
+          <input type="date" className="apple-input" value={tanggalAwal} onChange={e => setTanggalAwal(e.target.value)} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: '#6E6E73', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Sampai Tanggal</div>
+          <input type="date" className="apple-input" value={tanggalAkhir} onChange={e => setTanggalAkhir(e.target.value)} />
+        </div>
+      </>
+    )}
+    {mode === 'bulan' && (
       <div>
         <div style={{ fontSize: 11, color: '#6E6E73', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Bulan</div>
         <input type="month" className="apple-input" value={bulan} onChange={e => setBulan(e.target.value)} />
@@ -271,7 +278,7 @@ const KetepatanDokterSection = ({ params }) => {
 
           <TableWrap>
             <thead>
-              <tr><TH>Dokter</TH><TH>Jumlah Praktek</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>Belum Ada Data</TH><TH>% Sesuai</TH></tr>
+              <tr><TH>Dokter</TH><TH>Jml Booking</TH><TH>Sesuai (≤45 mnt)</TH><TH>Tidak Sesuai</TH><TH>Belum Ada Data</TH><TH>% Sesuai</TH></tr>
             </thead>
             <tbody>
               {data.length === 0
@@ -306,13 +313,16 @@ const KetepatanDokterSection = ({ params }) => {
 
 /* ─── MAIN PAGE ───────────────────────────────────────────────────── */
 function AntrolPertanggalPage() {
-  const [mode, setMode]       = useState('tanggal'); // 'tanggal' | 'bulan'
-  const [tanggal, setTanggal] = useState(today());
+  const [mode, setMode]       = useState('tanggal'); // 'tanggal' (selalu rentang, dari=sampai kalau cuma 1 hari) | 'bulan'
   const [bulan, setBulan]     = useState(currentMonth());
+  const [tanggalAwal, setTanggalAwal] = useState(today());
+  const [tanggalAkhir, setTanggalAkhir] = useState(today());
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const params = mode === 'tanggal' ? { tanggal } : { bulan };
+  const params = mode === 'tanggal'
+    ? { tanggal_awal: tanggalAwal, tanggal_akhir: tanggalAkhir }
+    : { bulan };
   // refreshKey dipakai supaya tombol Refresh bisa memaksa re-fetch walau params sama
   const effectiveParams = { ...params, _r: refreshKey };
 
@@ -355,8 +365,9 @@ function AntrolPertanggalPage() {
             <div className="apple-card" style={{ padding: '20px 28px 4px' }}>
               <FilterBar
                 mode={mode} setMode={setMode}
-                tanggal={tanggal} setTanggal={setTanggal}
                 bulan={bulan} setBulan={setBulan}
+                tanggalAwal={tanggalAwal} setTanggalAwal={setTanggalAwal}
+                tanggalAkhir={tanggalAkhir} setTanggalAkhir={setTanggalAkhir}
                 onRefresh={() => setRefreshKey(k => k + 1)}
                 loading={loading}
               />

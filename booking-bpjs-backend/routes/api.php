@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\PublicAntreanController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\AdminwablasController;
 use App\Http\Controllers\Api\NpsLaporanController; // namespace sesuai file: App\Http\Controllers
+use App\Http\Controllers\Api\AntrianPanggilanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,16 +42,27 @@ use App\Http\Controllers\Api\NpsLaporanController; // namespace sesuai file: App
         Route::get('/surat-kontrol',  [MonitoringController::class, 'suratKontrol']);
         Route::get('/jadwal-operasi', [MonitoringController::class, 'jadwalOperasi']);
         Route::get('/antrol-pertanggal', [MonitoringController::class, 'antrolPertanggal']);
+        Route::get('/taskid-durasi', [MonitoringController::class, 'taskIdDurasi']);
+        Route::get('/ketepatan-dokter', [MonitoringController::class, 'ketepatanDokter']);
         Route::get('/bor', [MonitoringController::class, 'borDashboard']);
         Route::post('/sync-taskid', [MonitoringController::class, 'syncTaskId']);
         Route::get('/taskid/{nobooking}', [MonitoringController::class, 'getTaskId']);
-        Route::get('/taskid-durasi', [MonitoringController::class, 'taskIdDurasi']);
-        Route::get('/ketepatan-dokter', [MonitoringController::class, 'ketepatanDokter']);
         Route::get('/test-bpjs', function() {
     $service = new \App\Services\BpjsAntreanService();
     $result = $service->getAntreanByTanggal('2026-05-07');
     return response()->json($result);
 });
+    });
+
+    // ─── ANTRIAN PANGGILAN (ANJUNGAN UMUM/BPJS/FARMASI) ──────────────
+    Route::prefix('antrian-panggilan')->group(function () {
+        Route::post('/ambil-nomor', [AntrianPanggilanController::class, 'ambilNomor']);
+        Route::post('/generate-banyak', [AntrianPanggilanController::class, 'generateBanyak']);
+        Route::get('/menunggu', [AntrianPanggilanController::class, 'listMenunggu']);
+        Route::post('/panggil-berikutnya', [AntrianPanggilanController::class, 'panggilBerikutnya']);
+        Route::post('/panggil-ulang', [AntrianPanggilanController::class, 'panggilUlang']);
+        Route::post('/selesai', [AntrianPanggilanController::class, 'selesai']);
+        Route::get('/display', [AntrianPanggilanController::class, 'display']);
     });
 
     // ─── NPS LAPORAN ────────────────────────────────────────────────

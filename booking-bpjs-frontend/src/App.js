@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import MainPage from './components/mainpage';
 import MonitoringPage from './components/pages/MonitoringPage';
 import AntrolPertanggalPage from './components/pages/AntrolPertanggalPage';
+import LoketPanggilanPage from './components/pages/LoketPanggilanPage';
+import DisplayAntrianPage from './components/pages/DisplayAntrianPage';
 import AdminWablas from './components/pages/Adminwablas';
 
 function App() {
@@ -20,6 +22,10 @@ function App() {
 
         {/* Route antrol per tanggal — analitik durasi task id & ketepatan dokter */}
         <Route path="/antrolpertanggal" element={<AntrolPertanggalPage />} />
+
+        {/* Route anjungan panggilan — panel petugas & layar publik */}
+        <Route path="/loket-panggilan" element={<LoketPanggilanPage />} />
+        <Route path="/display-antrian" element={<DisplayAntrianPage />} />
 
         {/* Route admin wablas (reminder & NPS) */}
         <Route path="/admin-wablas" element={<AdminWablas />} />

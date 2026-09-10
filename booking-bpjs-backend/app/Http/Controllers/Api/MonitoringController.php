@@ -923,8 +923,10 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
     public function taskIdDurasi(Request $request): JsonResponse
     {
         try {
-            $tanggal = $request->get('tanggal');
-            $bulan   = $request->get('bulan');
+            $tanggal      = $request->get('tanggal');
+            $bulan        = $request->get('bulan');
+            $tanggalAwal  = $request->get('tanggal_awal');
+            $tanggalAkhir = $request->get('tanggal_akhir');
 
             // Ambil semua pasangan (no_rawat, taskid, waktu) dalam rentang filter.
             // Difilter berdasarkan tanggalperiksa di referensi_mobilejkn_bpjs (pakai no_rawat).
@@ -932,7 +934,9 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
                 ->join('referensi_mobilejkn_bpjs as rmb', 'rmb.no_rawat', '=', 't.no_rawat')
                 ->select('t.no_rawat', 't.taskid', 't.waktu', 'rmb.tanggalperiksa');
 
-            if ($tanggal) {
+            if ($tanggalAwal && $tanggalAkhir) {
+                $query->whereBetween(DB::raw('DATE(rmb.tanggalperiksa)'), [$tanggalAwal, $tanggalAkhir]);
+            } elseif ($tanggal) {
                 $query->whereDate('rmb.tanggalperiksa', $tanggal);
             } elseif ($bulan) {
                 $query->whereRaw("DATE_FORMAT(rmb.tanggalperiksa, '%Y-%m') = ?", [$bulan]);
@@ -1024,7 +1028,7 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
 
             return response()->json([
                 'success'          => true,
-                'filter'           => $tanggal ? "tanggal: $tanggal" : ($bulan ? "bulan: $bulan" : 'default: hari ini'),
+                'filter'           => ($tanggalAwal && $tanggalAkhir) ? "rentang: $tanggalAwal s/d $tanggalAkhir" : ($tanggal ? "tanggal: $tanggal" : ($bulan ? "bulan: $bulan" : 'default: hari ini')),
                 'per_tahap'        => $hasil,
                 'waktu_tunggu_poli_2_4' => $waktuTungguPoli,
                 'total_pasien'     => count($perPasien),
@@ -1046,12 +1050,17 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
     public function ketepatanDokter(Request $request): JsonResponse
     {
         try {
-            $tanggal = $request->get('tanggal');
-            $bulan   = $request->get('bulan');
+            $tanggal      = $request->get('tanggal');
+            $bulan        = $request->get('bulan');
+            $tanggalAwal  = $request->get('tanggal_awal');
+            $tanggalAkhir = $request->get('tanggal_akhir');
             $hariArr = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
 
             // Tentukan rentang tanggal yang mau dievaluasi
-            if ($tanggal) {
+            if ($tanggalAwal && $tanggalAkhir) {
+                $tglMulai = $tanggalAwal;
+                $tglAkhir = $tanggalAkhir;
+            } elseif ($tanggal) {
                 $tglMulai = $tglAkhir = $tanggal;
             } elseif ($bulan) {
                 $tglMulai = $bulan . '-01';
@@ -1174,7 +1183,7 @@ public function getTaskId(Request $request, string $nobooking): JsonResponse
 
             return response()->json([
                 'success' => true,
-                'filter'  => $tanggal ? "tanggal: $tanggal" : ($bulan ? "bulan: $bulan" : 'default: hari ini'),
+                'filter'  => ($tanggalAwal && $tanggalAkhir) ? "rentang: $tanggalAwal s/d $tanggalAkhir" : ($tanggal ? "tanggal: $tanggal" : ($bulan ? "bulan: $bulan" : 'default: hari ini')),
                 'data'    => $hasil,
             ]);
         } catch (\Exception $e) {
