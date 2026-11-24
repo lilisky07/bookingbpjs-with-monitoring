@@ -328,6 +328,83 @@ const appleStyle = `
   .footer-stat:hover { transform:translateY(-2px) scale(1.06); opacity:1 !important; }
 `;
 
+/* ─── GLASS THEME (menimpa sebagian appleStyle) ───────────────────── */
+const glassStyle = `
+  .mon-scene { min-height: 100vh; position: relative; }
+  .mon-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(55% 45% at 12% 8%,  rgba(255,170,130,0.55), transparent 70%),
+      radial-gradient(50% 45% at 92% 18%, rgba(120,150,255,0.50), transparent 70%),
+      radial-gradient(60% 50% at 62% 100%, rgba(190,140,255,0.45), transparent 70%),
+      linear-gradient(160deg, #f6e9e3, #e8e6f7 55%, #dfeaf6);
+  }
+  .mon-wrap { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 18px 24px 48px 100px; }
+
+  /* kartu kaca: kalau terasa berat, hapus 2 baris backdrop-filter */
+  .apple-card {
+    background: rgba(255,255,255,0.58);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    border-radius: 26px;
+    border: 1px solid rgba(255,255,255,0.85);
+    box-shadow: 0 10px 30px rgba(80,70,140,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+  .modal-content { border-radius: 28px; }
+
+  /* header */
+  .mon-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; animation: slideDown 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  .mon-brand { display: flex; align-items: center; gap: 14px; }
+  .mon-logo {
+    width: 52px; height: 52px; border-radius: 18px; display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(140deg, #5b9bff, #7a5cf0); box-shadow: 0 8px 22px rgba(91,120,255,0.38);
+    transition: transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  }
+  .mon-logo:hover { transform: scale(1.08) rotate(-4deg); }
+  .mon-brand h1 { font-size: clamp(20px, 2.6vw, 28px); font-weight: 700; color: #1D1D1F; letter-spacing: -0.6px; }
+  .mon-brand p  { font-size: 12.5px; color: #6E6E73; margin-top: 2px; }
+  .mon-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mon-link {
+    padding: 9px 16px; border-radius: 99px; font-size: 12.5px; font-weight: 600; text-decoration: none; color: #1D1D1F;
+    background: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.9); display: inline-block;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+  }
+  .mon-link:hover  { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(80,70,140,0.16); }
+  .mon-link:active { transform: scale(0.95); }
+  .mon-link.primary { background: linear-gradient(140deg, #5b9bff, #3b6df0); color: #fff; border-color: transparent; box-shadow: 0 8px 20px rgba(59,109,240,0.35); }
+
+  /* dock kiri (menggantikan tab bar) */
+  .mon-dock {
+    position: fixed; left: 16px; top: 50%; transform: translateY(-50%); z-index: 90;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 99px;
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 12px 30px rgba(80,70,140,0.18);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    animation: fadeIn 0.5s ease both;
+  }
+  .mon-dock button {
+    position: relative; width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: transparent; font-size: 18px; display: grid; place-items: center;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .mon-dock button:hover { transform: scale(1.14); background: rgba(255,255,255,0.8); }
+  .mon-dock button:active { transform: scale(0.94); }
+  .mon-dock button.on { background: #fff; box-shadow: 0 6px 16px rgba(80,70,140,0.25); }
+  .mon-dock button::after {
+    content: attr(data-tip); position: absolute; left: 56px; white-space: nowrap; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 99px; background: rgba(30,28,40,0.88); color: #fff;
+    opacity: 0; transform: translateX(-4px); pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
+  }
+  .mon-dock button:hover::after { opacity: 1; transform: none; }
+
+  @media (max-width: 900px) {
+    .mon-wrap { padding: 14px 14px 100px; }
+    .mon-dock { top: auto; bottom: 14px; left: 50%; transform: translateX(-50%); flex-direction: row; max-width: calc(100vw - 24px); overflow-x: auto; }
+    .mon-dock button::after { display: none; }
+  }
+`;
+
 /* ─── HELPERS ─────────────────────────────────────────────────────── */
 const fmt = (v) => (v === null || v === undefined ? '—' : v);
 const fmtTime = (t) => {
@@ -1339,6 +1416,7 @@ const TABS = [
 function MonitoringPage() {
   const [activeTab, setActiveTab]       = useState('overview');
   const [selectedDate, setSelectedDate] = useState(today());
+  const cur = TABS.find(t => t.id === activeTab);
 
   const wrap = (children) => (
     <div className="apple-card" style={{ padding: '24px 28px', animation: 'scaleIn 0.26s cubic-bezier(0.34,1.56,0.64,1)' }}>
@@ -1348,93 +1426,54 @@ function MonitoringPage() {
 
   return (
     <>
-      <style>{appleStyle}</style>
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F2F2F7 0%, #FAFAFA 100%)' }}>
+      <style>{appleStyle + glassStyle}</style>
+      <div className="mon-scene">
+        <div className="mon-bg" />
 
-        {/* ── Navbar ── */}
-        <div style={{
-          background: 'rgba(255,255,255,0.80)',
-          backdropFilter: 'blur(24px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(200%)',
-          borderBottom: '0.5px solid rgba(0,0,0,0.09)',
-          position: 'sticky', top: 0, zIndex: 100,
-        }}>
-          <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg, #007AFF, #0055CC)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, boxShadow: '0 3px 10px rgba(0,122,255,0.38)', transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease' }}
-                  onMouseEnter={e => { e.currentTarget.style.transform='scale(1.10)'; e.currentTarget.style.boxShadow='0 6px 18px rgba(0,122,255,0.45)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform='scale(1)';    e.currentTarget.style.boxShadow='0 3px 10px rgba(0,122,255,0.38)'; }}>🏥</div>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1F', letterSpacing: '-0.4px' }}>Monitoring Kepatuhan BPJS</div>
-                  <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 1, letterSpacing: '-0.1px' }}>RS Gladish Medical Centre</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                  className="apple-input" style={{ fontSize: 12.5 }} />
-                <a href="/antrolpertanggal" style={{
-                  padding: '7px 14px', borderRadius: 10,
-                  background: 'rgba(120,120,128,0.13)', color: '#1D1D1F',
-                  fontSize: 12.5, fontWeight: 600, textDecoration: 'none',
-                  letterSpacing: '-0.1px', border: '0.5px solid rgba(0,0,0,0.09)',
-                  transition: 'transform 0.14s cubic-bezier(0.34,1.56,0.64,1)',
-                  display: 'inline-block',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.transform='scale(1.04)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform='scale(1)'; }}
-                  onMouseDown={e  => { e.currentTarget.style.transform='scale(0.96)'; }}
-                  onMouseUp={e    => { e.currentTarget.style.transform='scale(1.04)'; }}>
-                  ⏱ Analisis task id
-                </a>
-                <a href="/bookingbpjs" style={{
-                  padding: '7px 14px', borderRadius: 10,
-                  background: 'linear-gradient(135deg, #007AFF, #0063CC)',
-                  color: '#fff', fontSize: 12.5, fontWeight: 600, textDecoration: 'none',
-                  letterSpacing: '-0.1px', boxShadow: '0 3px 10px rgba(0,122,255,0.35)',
-                  transition: 'transform 0.14s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease',
-                  display: 'inline-block',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.transform='scale(1.04)'; e.currentTarget.style.boxShadow='0 5px 18px rgba(0,122,255,0.44)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform='scale(1)';    e.currentTarget.style.boxShadow='0 3px 10px rgba(0,122,255,0.35)'; }}
-                  onMouseDown={e  => { e.currentTarget.style.transform='scale(0.96)'; }}
-                  onMouseUp={e    => { e.currentTarget.style.transform='scale(1.04)'; }}>
-                  🎫 Booking Antrol
-                </a>
+        <nav className="mon-dock">
+          {TABS.map(tab => (
+            <button key={tab.id} data-tip={tab.label} aria-label={tab.label}
+              className={activeTab === tab.id ? 'on' : ''} onClick={() => setActiveTab(tab.id)}>
+              {tab.icon}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mon-wrap">
+          <header className="mon-head">
+            <div className="mon-brand">
+              <div className="mon-logo">🏥</div>
+              <div>
+                <h1>Monitoring Kepatuhan BPJS</h1>
+                <p>RS Gladish Medical Centre · {cur ? cur.label : ''}</p>
               </div>
             </div>
-
-            {/* Tab bar */}
-            <div style={{ display: 'flex', gap: 0, marginTop: 10, overflowX: 'auto' }}>
-              {TABS.map(tab => (
-                <button key={tab.id} className="nav-tab" onClick={() => setActiveTab(tab.id)} style={{
-                  color: activeTab === tab.id ? '#007AFF' : '#6E6E73',
-                  fontWeight: activeTab === tab.id ? 600 : 400,
-                  borderBottom: activeTab === tab.id ? '2px solid #007AFF' : '2px solid transparent',
-                }}>{tab.icon} {tab.label}</button>
-              ))}
+            <div className="mon-actions">
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                className="apple-input" style={{ fontSize: 12.5, borderRadius: 99, padding: '8px 16px' }} />
+              <a href="/antrolpertanggal" className="mon-link">⏱ Analisis task id</a>
+              <a href="/bookingbpjs" className="mon-link primary">🎫 Booking Antrol</a>
             </div>
+          </header>
+
+          <div className="page-content" key={activeTab}>
+            {activeTab === 'overview' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
+                <OverviewAntrolSection selectedDate={selectedDate} />
+              </div>
+            )}
+            {activeTab === 'tt' && wrap(<TempurTidurSection />)}
+            {activeTab === 'antrol_detail' && <AntrolTab selectedDate={selectedDate} />}
+            {activeTab === 'sep' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
+                <AntrolTab selectedDate={selectedDate} />
+              </div>
+            )}
+            {activeTab === 'surat_kontrol' && wrap(<SuratKontrolSection selectedDate={selectedDate} />)}
+            {activeTab === 'operasi'       && wrap(<JadwalOperasiSection selectedDate={selectedDate} />)}
           </div>
-        </div>
-
-        {/* ── Content ── */}
-        <div className="page-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '24px' }}>
-          {activeTab === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
-              <OverviewAntrolSection selectedDate={selectedDate} />
-            </div>
-          )}
-          {activeTab === 'tt' && wrap(<TempurTidurSection />)}
-          {activeTab === 'antrol_detail' && <AntrolTab selectedDate={selectedDate} />}
-          {activeTab === 'sep' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {wrap(<SepVclaimSection selectedDate={selectedDate} />)}
-              <AntrolTab selectedDate={selectedDate} />
-            </div>
-          )}
-          {activeTab === 'surat_kontrol' && wrap(<SuratKontrolSection selectedDate={selectedDate} />)}
-          {activeTab === 'operasi'       && wrap(<JadwalOperasiSection selectedDate={selectedDate} />)}
         </div>
       </div>
     </>

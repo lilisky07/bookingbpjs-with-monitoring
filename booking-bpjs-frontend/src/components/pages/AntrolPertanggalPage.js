@@ -71,6 +71,80 @@ const appleStyle = `
   .page-content { animation: fadeIn 0.25s ease both; }
 `;
 
+/* ─── GLASS THEME (menimpa sebagian appleStyle) ───────────────────── */
+const glassStyle = `
+  .mon-scene { min-height: 100vh; position: relative; }
+  .mon-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(55% 45% at 12% 8%,  rgba(255,170,130,0.55), transparent 70%),
+      radial-gradient(50% 45% at 92% 18%, rgba(120,150,255,0.50), transparent 70%),
+      radial-gradient(60% 50% at 62% 100%, rgba(190,140,255,0.45), transparent 70%),
+      linear-gradient(160deg, #f6e9e3, #e8e6f7 55%, #dfeaf6);
+  }
+  .mon-wrap { position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; padding: 18px 24px 48px 100px; }
+
+  /* kartu kaca: kalau terasa berat, hapus 2 baris backdrop-filter */
+  .apple-card {
+    background: rgba(255,255,255,0.58);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    border-radius: 26px;
+    border: 1px solid rgba(255,255,255,0.85);
+    box-shadow: 0 10px 30px rgba(80,70,140,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+
+  /* header */
+  .mon-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; animation: slideDown 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  .mon-brand { display: flex; align-items: center; gap: 14px; }
+  .mon-logo {
+    width: 52px; height: 52px; border-radius: 18px; display: grid; place-items: center; font-size: 24px;
+    background: linear-gradient(140deg, #5b9bff, #7a5cf0); box-shadow: 0 8px 22px rgba(91,120,255,0.38);
+    transition: transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  }
+  .mon-logo:hover { transform: scale(1.08) rotate(-4deg); }
+  .mon-brand h1 { font-size: clamp(18px, 2.4vw, 26px); font-weight: 700; color: #1D1D1F; letter-spacing: -0.6px; }
+  .mon-brand p  { font-size: 12.5px; color: #6E6E73; margin-top: 2px; }
+  .mon-link {
+    padding: 9px 16px; border-radius: 99px; font-size: 12.5px; font-weight: 600; text-decoration: none; color: #1D1D1F;
+    background: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.9); display: inline-block;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+  }
+  .mon-link:hover  { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(80,70,140,0.16); }
+  .mon-link:active { transform: scale(0.95); }
+
+  /* dock kiri (link antar halaman) */
+  .mon-dock {
+    position: fixed; left: 16px; top: 50%; transform: translateY(-50%); z-index: 90;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 99px;
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 12px 30px rgba(80,70,140,0.18);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    animation: fadeIn 0.5s ease both;
+  }
+  .mon-dock a {
+    position: relative; width: 44px; height: 44px; border-radius: 50%; text-decoration: none; color: #1D1D1F;
+    font-size: 18px; display: grid; place-items: center;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .mon-dock a:hover { transform: scale(1.14); background: rgba(255,255,255,0.8); }
+  .mon-dock a:active { transform: scale(0.94); }
+  .mon-dock a.on { background: #fff; box-shadow: 0 6px 16px rgba(80,70,140,0.25); }
+  .mon-dock a::after {
+    content: attr(data-tip); position: absolute; left: 56px; white-space: nowrap; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 99px; background: rgba(30,28,40,0.88); color: #fff;
+    opacity: 0; transform: translateX(-4px); pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
+  }
+  .mon-dock a:hover::after { opacity: 1; transform: none; }
+
+  @media (max-width: 900px) {
+    .mon-wrap { padding: 14px 14px 100px; }
+    .mon-dock { top: auto; bottom: 14px; left: 50%; transform: translateX(-50%); flex-direction: row; max-width: calc(100vw - 24px); overflow-x: auto; }
+    .mon-dock a::after { display: none; }
+  }
+`;
+
 /* ─── HELPERS ─────────────────────────────────────────────────────── */
 const fmt = (v) => (v === null || v === undefined || v === '' ? '—' : v);
 const today = () => new Date().toISOString().split('T')[0];
@@ -328,58 +402,51 @@ function AntrolPertanggalPage() {
 
   return (
     <>
-      <style>{appleStyle}</style>
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #F2F2F7 0%, #FAFAFA 100%)' }}>
+      <style>{appleStyle + glassStyle}</style>
+      <div className="mon-scene">
+        <div className="mon-bg" />
 
-        {/* ── Navbar ── */}
-        <div style={{
-          background: 'rgba(255,255,255,0.80)',
-          backdropFilter: 'blur(24px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(200%)',
-          borderBottom: '0.5px solid rgba(0,0,0,0.09)',
-          position: 'sticky', top: 0, zIndex: 100,
-        }}>
-          <div style={{ maxWidth: 1400, margin: '0 auto', padding: '13px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <div style={{ width: 36, height: 36, background: 'linear-gradient(135deg, #007AFF, #0055CC)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, boxShadow: '0 3px 10px rgba(0,122,255,0.38)' }}>⏱</div>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1D1D1F', letterSpacing: '-0.4px' }}>Antrol Per Tanggal — Analitik Task ID</div>
-                  <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 1, letterSpacing: '-0.1px' }}>Durasi alur & ketepatan dokter</div>
+        <nav className="mon-dock">
+          <a href="/monitoring" data-tip="Monitoring" aria-label="Monitoring">⊞</a>
+          <a href="/antrolpertanggal" data-tip="Analitik Task ID" aria-label="Analitik Task ID" className="on">⏱</a>
+          <a href="/bookingbpjs" data-tip="Booking Antrol" aria-label="Booking Antrol">🎫</a>
+        </nav>
+
+        <div className="mon-wrap">
+          {/* ── Header ── */}
+          <header className="mon-head">
+            <div className="mon-brand">
+              <div className="mon-logo">⏱</div>
+              <div>
+                <h1>Antrol Per Tanggal — Analitik Task ID</h1>
+                <p>Durasi alur & ketepatan dokter</p>
+              </div>
+            </div>
+            <a href="/monitoring" className="mon-link">← Kembali ke Monitoring</a>
+          </header>
+
+          {/* ── Content ── */}
+          <div className="page-content">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div className="apple-card" style={{ padding: '20px 28px 4px' }}>
+                <FilterBar
+                  mode={mode} setMode={setMode}
+                  bulan={bulan} setBulan={setBulan}
+                  tanggalAwal={tanggalAwal} setTanggalAwal={setTanggalAwal}
+                  tanggalAkhir={tanggalAkhir} setTanggalAkhir={setTanggalAkhir}
+                  onRefresh={() => setRefreshKey(k => k + 1)}
+                  loading={loading}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 18, alignItems: 'start' }}>
+                <div className="apple-card" style={{ padding: '24px 28px' }}>
+                  <TaskIdDurasiSection params={effectiveParams} />
                 </div>
-              </div>
-              <a href="/monitoring" style={{
-                padding: '7px 14px', borderRadius: 10,
-                background: 'rgba(120,120,128,0.13)', color: '#1D1D1F',
-                fontSize: 12.5, fontWeight: 600, textDecoration: 'none', letterSpacing: '-0.1px',
-              }}>
-                ← Kembali ke Monitoring
-              </a>
-            </div>
-          </div>
-        </div>
 
-        {/* ── Content ── */}
-        <div className="page-content" style={{ maxWidth: 1600, margin: '0 auto', padding: '24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div className="apple-card" style={{ padding: '20px 28px 4px' }}>
-              <FilterBar
-                mode={mode} setMode={setMode}
-                bulan={bulan} setBulan={setBulan}
-                tanggalAwal={tanggalAwal} setTanggalAwal={setTanggalAwal}
-                tanggalAkhir={tanggalAkhir} setTanggalAkhir={setTanggalAkhir}
-                onRefresh={() => setRefreshKey(k => k + 1)}
-                loading={loading}
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 18, alignItems: 'start' }}>
-              <div className="apple-card" style={{ padding: '24px 28px' }}>
-                <TaskIdDurasiSection params={effectiveParams} />
-              </div>
-
-              <div className="apple-card" style={{ padding: '24px 28px' }}>
-                <KetepatanDokterSection params={effectiveParams} />
+                <div className="apple-card" style={{ padding: '24px 28px' }}>
+                  <KetepatanDokterSection params={effectiveParams} />
+                </div>
               </div>
             </div>
           </div>
