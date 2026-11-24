@@ -380,6 +380,62 @@ const adminStyle = `
   }
 `;
 
+/* ─── GLASS THEME (menimpa sebagian adminStyle) ───────────────────── */
+const glassStyle = `
+  .mon-scene { min-height: 100vh; position: relative; }
+  .mon-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(55% 45% at 12% 8%,  rgba(255,170,130,0.55), transparent 70%),
+      radial-gradient(50% 45% at 92% 18%, rgba(120,150,255,0.50), transparent 70%),
+      radial-gradient(60% 50% at 62% 100%, rgba(190,140,255,0.45), transparent 70%),
+      linear-gradient(160deg, #f6e9e3, #e8e6f7 55%, #dfeaf6);
+  }
+  .mon-wrap { position: relative; z-index: 1; max-width: 1220px; margin: 0 auto; padding: 28px 24px 60px 100px; }
+
+  /* kartu kaca: kalau terasa berat, hapus 2 baris backdrop-filter */
+  .aw-card {
+    background: rgba(255,255,255,0.58);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    border-radius: 26px;
+    border: 1px solid rgba(255,255,255,0.85);
+    box-shadow: 0 10px 30px rgba(80,70,140,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+  .aw-card.hoverable:hover, .trigger-card:hover { border-color: rgba(255,255,255,1); }
+
+  /* dock kiri (menggantikan tab) */
+  .mon-dock {
+    position: fixed; left: 16px; top: 50%; transform: translateY(-50%); z-index: 90;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 99px;
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 12px 30px rgba(80,70,140,0.18);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    animation: fadeIn 0.5s ease both;
+  }
+  .mon-dock button {
+    position: relative; width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: transparent; font-size: 18px; display: grid; place-items: center;
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .mon-dock button:hover { transform: scale(1.14); background: rgba(255,255,255,0.8); }
+  .mon-dock button:active { transform: scale(0.94); }
+  .mon-dock button.on { background: #fff; box-shadow: 0 6px 16px rgba(80,70,140,0.25); }
+  .mon-dock button::after {
+    content: attr(data-tip); position: absolute; left: 56px; white-space: nowrap; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 99px; background: rgba(30,28,40,0.88); color: #fff;
+    opacity: 0; transform: translateX(-4px); pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
+  }
+  .mon-dock button:hover::after { opacity: 1; transform: none; }
+
+  @media (max-width: 900px) {
+    .mon-wrap { padding: 18px 14px 100px; }
+    .mon-dock { top: auto; bottom: 14px; left: 50%; transform: translateX(-50%); flex-direction: row; max-width: calc(100vw - 24px); overflow-x: auto; }
+    .mon-dock button::after { display: none; }
+  }
+`;
+
 /* ─── HELPERS ───────────────────────────────────────────────────── */
 const fmt = (n) => String(n || '').replace(/(\d{2})(\d+)/, '+$1 $2');
 
@@ -1038,11 +1094,28 @@ export default function AdminWablas() {
 
   /* ── render ──────────────────────────────────────────────────── */
   return (
-    <div style={{ minHeight:'100vh', background:'linear-gradient(145deg,#eef2f8 0%,#e5ecf7 40%,#dde7f5 100%)', padding:'28px 24px 60px' }}>
-      <style>{adminStyle}</style>
+    <div className="mon-scene">
+      <style>{adminStyle + glassStyle}</style>
+      <div className="mon-bg" />
+
+      {/* DOCK (menggantikan tab) */}
+      <nav className="mon-dock">
+        {[
+          { key:'config',   icon:'⚙️', label:'Konfigurasi'   },
+          { key:'sessions', icon:'💬', label:'Session Aktif'  },
+          { key:'trigger',  icon:'▶️', label:'Trigger Manual' },
+          { key:'test',     icon:'🧪', label:'Uji Kirim'      },
+          { key:'nps',      icon:'📊', label:'Laporan NPS'    },
+        ].map(t => (
+          <button key={t.key} data-tip={t.label} aria-label={t.label}
+            className={tab === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
+            {t.icon}
+          </button>
+        ))}
+      </nav>
 
       {/* HEADER */}
-      <div style={{ maxWidth:1100, margin:'0 auto' }}>
+      <div className="mon-wrap">
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:28 }}>
           <div>
             <h1 style={{ fontSize:28, fontWeight:700, color:'#1D1D1F', letterSpacing:'-0.8px', marginBottom:4 }}>
@@ -1068,21 +1141,6 @@ export default function AdminWablas() {
           <StatCard icon="📨" label="Reminder H-3"   value={stats?.reminder_h3_today ?? '—'} sub="terkirim hari ini"   color="#34C759" loading={statsLoading} delay={60}  />
           <StatCard icon="🔔" label="Reminder H-1"   value={stats?.reminder_h1_today ?? '—'} sub="terkirim hari ini"   color="#FF9500" loading={statsLoading} delay={120} />
           <StatCard icon="⭐" label="NPS Terkirim"   value={stats?.nps_today ?? '—'}          sub="survei hari ini"     color="#AF52DE" loading={statsLoading} delay={180} />
-        </div>
-
-        {/* TABS */}
-        <div className="aw-card" style={{ padding:'5px 6px', display:'inline-flex', gap:3, marginBottom:20 }}>
-          {[
-            { key:'config',   label:'⚙️  Konfigurasi'  },
-            { key:'sessions', label:'💬 Session Aktif'  },
-            { key:'trigger',  label:'▶️  Trigger Manual' },
-            { key:'test',     label:'🧪 Uji Kirim'      },
-            { key:'nps',      label:'📊 Laporan NPS'    },
-          ].map(t => (
-            <button key={t.key} className={`aw-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-              {t.label}
-            </button>
-          ))}
         </div>
 
         {/* ── TAB: KONFIGURASI ───────────────────────────────────── */}
